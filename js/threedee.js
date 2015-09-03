@@ -14,6 +14,9 @@ renderer.shadowMapEnabled = true;
 renderer.shadowMapType = THREE.PCFShadowMap;
 renderer.setSize( tdScreenWidth, tdScreenHeight );
 renderer.shadowMapType = THREE.PCFSoftShadowMap;
+
+var aryImageLoader = [];
+
 var ambientLight;
 var light;
 var plane, plane2;
@@ -86,12 +89,12 @@ var update = function() {
 requestAnimationFrame(update);
 //END OF STATS
 
-$(function() {
+function startEngine() {
     //plane = tdCreatePlane(0, -1);
     //plane2 = tdCreatePlane(1, 1);
     document.getElementById('view').appendChild( renderer.domElement );
     render();
-});
+}
 
 function render() {
     TWEEN.update();
@@ -114,9 +117,13 @@ function tdCreateTextures() {
                         tdTexture[ob][i].image = img + '-' + i;
                     }
                     if(fileExist(imagePath + tdTexture[ob][i].image + '.jpg')) {
-                        tdTexture[ob][i].texture = new THREE.ImageUtils.loadTexture(imagePath + tdTexture[ob][i].image + '.jpg');
+                        var strName = tdTexture[ob][i].image;
+                        aryImageLoader.push({Name: tdTexture[ob][i].image, Value: false});
+                        tdTexture[ob][i].texture = new THREE.ImageUtils.loadTexture(imagePath + tdTexture[ob][i].image + '.jpg', {}, function(strName) { checkImageLoading(strName)});
                     } else if(fileExist(imagePath + tdTexture[ob][i].image + '.png')) {
-                        tdTexture[ob][i].texture = new THREE.ImageUtils.loadTexture(imagePath + tdTexture[ob][i].image + '.png');
+                        var strName = tdTexture[ob][i].image;
+                        aryImageLoader.push({Name: tdTexture[ob][i].image, Value: false});
+                        tdTexture[ob][i].texture = new THREE.ImageUtils.loadTexture(imagePath + tdTexture[ob][i].image + '.png', {}, function(strName) { checkImageLoading(strName)});
                     } else {
                         tdTexture[ob].pop();
                         breaking = true;
@@ -147,6 +154,28 @@ function tdCreateTextures() {
             }
         }
     }
+}
+
+function checkImageLoading(strImageName){
+
+    var filename = strImageName.sourceFile.split('\\').pop().split('/').pop();
+    filename = filename.substring(0,filename.indexOf('.'))
+    var boolFinished = true;
+
+    for (x = 0; x < aryImageLoader.length;x++){
+        if (aryImageLoader[x].Name == filename){
+            aryImageLoader[x].Value = true;
+        }
+         if (aryImageLoader[x].Value == false){
+             boolFinished = false;
+         }
+    }
+    if (boolFinished){
+        aryImageLoader = [];
+        console.log("All Images Loaded, Its now safe to start the engine!");
+        startEngine();
+    }
+
 }
 
 function tdCreateLight() {
