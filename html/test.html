@@ -13,6 +13,7 @@
     <script type="text/javascript" src="http://code.jquery.com/jquery-2.1.4.min.js"></script>
     <script type="text/javascript" src="../js/three.min.js"></script>
     <script type="text/javascript" src="../js/tween.min.js"></script>
+    <script type="text/javascript" src="../js/stats.min.js"></script>
     <style>
     	#map, #view {
     		float: left;
@@ -75,7 +76,7 @@
 			        break;
 
 			        case 32:
-		        	setFloor(origin.x + dir[d].x, origin.y + dir[d].y, 'floor,door-open', 'door');
+		        	setFloor(origin.x + dir[d].x, origin.y + dir[d].y, 'floor,door-open', 'door', -1);
 					tdDrawAll();
 			        break;
 
@@ -88,6 +89,7 @@
 			//F: -1347, X: -35708, Y: -561, D: 0
 			//F: 27062, X: -13494, Y: 41160, D: 0
 			//F: 19272, X: 30367, Y: -22652, D: 3
+			//F: 22600, X: -23948, Y: -24524, D: 0
 			var c = $(this).val().toUpperCase();
 			c = c.replace(/ /g, '').split(',');
 			for(var i = 0; i < c.length; i++) {
@@ -227,8 +229,12 @@
 
 	function generateDeco(x, y) {
 		if(hasFloor(x, y, 'wall')) {
-			if(rand(origin.f, x, y, 860.97, 4) === 0) {
+			if(rand(origin.f, x, y, 860.97, 3) === 0) {
 				setFloor(x, y, 'wall,wall-deco', null, rand(origin.f, x, y, 123.13, 4));
+			}
+		} else if(hasFloor(x, y, 'wall2')) {
+			if(rand(origin.f, x, y, 860.97, 3) === 0) {
+				setFloor(x, y, 'wall2,wall-deco', null, rand(origin.f, x, y, 123.13, 4));
 			}
 		} else if(hasFloor(x, y, 'floor')) {
 			if(rand(origin.f, x, y, 860.97, 30) === 0) {
@@ -296,8 +302,10 @@
 					}
 					map[x - origin.x + viewSize / 2][y - origin.y + viewSize / 2].obj = ob;
 					if(typeof d !== "undefined" && d !== null) {
-						map[x - origin.x + viewSize / 2][y - origin.y + viewSize / 2].rotation = d;
-					} else if(typeof map[x - origin.x + viewSize / 2][y - origin.y + viewSize / 2].rotation === "undefined" || map[x - origin.x + viewSize / 2][y - origin.y + viewSize / 2].rotation === null) {
+						if(d > -1) {
+							map[x - origin.x + viewSize / 2][y - origin.y + viewSize / 2].rotation = d;
+						}
+					} else {
 						map[x - origin.x + viewSize / 2][y - origin.y + viewSize / 2].rotation = 0;
 					}
 					break;
@@ -361,7 +369,7 @@
 	function rand() {
 		var arg = Array.prototype.slice.call(arguments);
 		var s = arg[arg.length - 1];
-		var sum = arg.reduce(function(pv, cv, i) { return pv + cv * (i + seed());}, 0);
+		var sum = arg.reduce(function(pv, cv, i) { return pv + cv * (i + seedRandom());}, 0);
 		return Math.floor(random(sum) * s);
 	}
 
@@ -379,7 +387,7 @@
 	  }
 	}
 	var seedIndex = 45367813.923;
-	function seed() {
+	function seedRandom() {
 		return random(seedIndex) * 854345678.227;
 	}
 	</script>

@@ -9,11 +9,20 @@ scene.add(camera);
 mirrorCubeCamera = new THREE.CubeCamera( 0.1, 18, 512 );
 scene.add( mirrorCubeCamera );
 var renderer = new THREE.WebGLRenderer({ antialias: true});
-renderer.setClearColor(0x000000, 1.0); 
+renderer.setClearColor(0x000000, 1.0);
 renderer.shadowMapEnabled = true;
 renderer.shadowMapType = THREE.PCFShadowMap;
 renderer.setSize( tdScreenWidth, tdScreenHeight );
 renderer.shadowMapType = THREE.PCFSoftShadowMap;
+
+var intDoorImgCount = 0,
+    intFloorImgCount = 0,
+    intFloorDecoImgCount = 0,
+    intWallImgCount = 0,
+    intWallDecoImgCount = 0;
+
+var aryImageLoader = [];
+
 var ambientLight;
 var light;
 var plane, plane2;
@@ -64,34 +73,17 @@ var tdTexture = {
     }]
 };
 tdCreateTextures();
-tdCreateLight();
-tdUpdateCamera();
 //tdTexture['floor'][0].texture.repeat.x = viewSize * 1;
 //tdTexture['floor'][0].texture.repeat.y = viewSize * 1;
 
-//START OF STATS
-var stats = new Stats();
-stats.setMode(0); // 0: fps, 1: ms, 2: mb
-// align top-left
-stats.domElement.style.position = 'absolute';
-stats.domElement.style.left = '0px';
-stats.domElement.style.bottom = '0px';
-document.body.appendChild( stats.domElement );
-var update = function() {
-    stats.begin();
-    // monitored code goes here
-    stats.end();
-    requestAnimationFrame(update);
-};
-requestAnimationFrame(update);
-//END OF STATS
-
-$(function() {
+function startEngine() {
     //plane = tdCreatePlane(0, -1);
     //plane2 = tdCreatePlane(1, 1);
+    tdCreateLight();
+    tdUpdateCamera();
     document.getElementById('view').appendChild( renderer.domElement );
     render();
-});
+};
 
 function render() {
     TWEEN.update();
@@ -110,13 +102,17 @@ function tdCreateTextures() {
                     if(typeof tdTexture[ob][j].multi !== "undefined" && tdTexture[ob][j].multi) {
                         if(tdTexture[ob].length <= i) {
                             tdTexture[ob][i] = {};
-                        } 
+                        }
                         tdTexture[ob][i].image = img + '-' + i;
                     }
                     if(fileExist(imagePath + tdTexture[ob][i].image + '.jpg')) {
-                        tdTexture[ob][i].texture = new THREE.ImageUtils.loadTexture(imagePath + tdTexture[ob][i].image + '.jpg');
+                        var strName = tdTexture[ob][i].image;
+                        aryImageLoader.push({Name: tdTexture[ob][i].image, Value: false});
+                        tdTexture[ob][i].texture = new THREE.ImageUtils.loadTexture(imagePath + tdTexture[ob][i].image + '.jpg', {}, function(strName) { checkImageLoading(strName)});
                     } else if(fileExist(imagePath + tdTexture[ob][i].image + '.png')) {
-                        tdTexture[ob][i].texture = new THREE.ImageUtils.loadTexture(imagePath + tdTexture[ob][i].image + '.png');
+                        var strName = tdTexture[ob][i].image;
+                        aryImageLoader.push({Name: tdTexture[ob][i].image, Value: false});
+                        tdTexture[ob][i].texture = new THREE.ImageUtils.loadTexture(imagePath + tdTexture[ob][i].image + '.png', {}, function(strName) { checkImageLoading(strName)});
                     } else {
                         tdTexture[ob].pop();
                         breaking = true;
@@ -133,7 +129,7 @@ function tdCreateTextures() {
                     var refl = null;
                     if(typeof tdTexture[ob][j].reflection !== "undefined" || tdTexture[ob][j].reflection) {
                         refl = mirrorCubeCamera.renderTarget;
-                    }               
+                    }
                     tdTexture[ob][i].material = new THREE.MeshPhongMaterial( {map: tdTexture[ob][i].texture, transparent: trans, shininess: 10, side: THREE.SingleSide, bumpMap: bump, bumpScale: 0.05, envMap: refl} );
                     tdTexture[ob][i].texture.wrapT = THREE.RepeatWrapping;
                     tdTexture[ob][i].texture.wrapS = THREE.RepeatWrapping;
@@ -148,6 +144,30 @@ function tdCreateTextures() {
         }
     }
 }
+
+function checkImageLoading(strImageName){
+
+    var filename = strImageName.sourceFile.split('\\').pop().split('/').pop();
+    filename = filename.substring(0,filename.indexOf('.'))
+    var boolFinished = true;
+
+    for (x = 0; x < aryImageLoader.length;x++){
+        if (aryImageLoader[x].Name == filename){
+            aryImageLoader[x].Value = true;
+        }
+         if (aryImageLoader[x].Value == false){
+             boolFinished = false;
+         }
+    }
+    if (boolFinished){
+        aryImageLoader = [];
+        console.log("All Images Loaded, Its now safe to start the engine!");
+        startEngine();
+    }
+
+}
+
+
 
 function tdCreateLight() {
     ambientLight = new THREE.AmbientLight(0x404850); //404850
@@ -198,11 +218,9 @@ function tdDrawAll() {
 function tdCreateObject(x, y) {
     var ob = getFloor(x, y).split(',');
     var msg = new THREE.Object3D();
-    var seed = 0;
     msg.position.x = (x - origin.x) * 1.5;
     msg.position.y = 0;//(z1 + (z2 / 2)) * 1.0;
     msg.position.z = (y - origin.y) * 1.5;
-    msg.rotation.y = (-(map[x - origin.x + viewSize / 2][y - origin.y + viewSize / 2].rotation + 2) * 90) * Math.PI / 180;
 
     /*g = new THREE.BoxGeometry( 0.02, 0.02, 0.02, 10 );
     pivot = new THREE.Mesh(g, tdTexture['test'][0].material);
@@ -227,18 +245,18 @@ function tdCreateObject(x, y) {
                 case 'pit': x1 = 0.2, y1 = 0.2, z1 = 0.001, x2 = 0.6, y2 = 0.6, z2 = 1; type = 'floor'; mat = 'pit'; break;
                 case 'stairsup': x1 = 0, y1 = 0, z1 = 0.001, x2 = 1, y2 = 1, z2 = 0.998; type = 'stairs-up'; mat = 'wall'; rnd = 100; break;
                 case 'stairsdown': x1 = 0, y1 = 0, z1 = -0.999, x2 = 1, y2 = 1, z2 = 0.998; type = 'stairs-down'; mat = 'wall'; rnd = 100; break;
-                case 'wall-deco': x1 = 0, y1 = 0, z1 = 0, x2 = 1, y2 = 1.001, z2 = 1; type = 'wall-deco'; mat = 'wall-deco'; seed = 860.97; break;
-                case 'floor-deco': x1 = 0, y1 = 0, z1 = 0.001, x2 = 1, y2 = 1, z2 = 1; type = 'floor'; mat = 'floor-deco'; seed = 860.97; break;
+                case 'wall-deco': x1 = 0, y1 = 0, z1 = 0, x2 = 1, y2 = 1, z2 = 1; type = 'wall-deco'; mat = 'wall-deco'; break;
+                case 'floor-deco': x1 = 0, y1 = 0, z1 = 0.001, x2 = 1, y2 = 1, z2 = 1; type = 'floor'; mat = 'floor-deco'; break;
                 default: break;
             }
-            drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, 0, type, mat, rnd, seed);
+            drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, map[x - origin.x + viewSize / 2][y - origin.y + viewSize / 2].rotation, type, mat, rnd);
         //}
     }
     scene.add(msg);
     return msg;
 }
 
-function drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, d, type, mat, rnd, seed) {
+function drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, d, type, mat, rnd) {
     var ms = null;
     var g = null;
     d1 = (d + 1) % 4;
@@ -247,65 +265,46 @@ function drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, d, type, mat, rnd, seed) 
     if(mat !== '' && type !== '') {
         switch(type) {
             case 'box':
-            /*g = new THREE.BoxGeometry( x2, z2, y2, 1 );
+            g = new THREE.BoxGeometry( x2, z2, y2, 1 );
             ms = new THREE.Mesh(g, tdTexture[mat][rand(Math.floor(origin.f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), 129.22, tdTexture[mat].length)].material);
             ms.scale.set(1.5, 1.0, 1.5);
-            ms.rotation.y = (-(d + 2) * 90) * Math.PI / 180;
             ms.position.x = (x1 + (x2 / 2)) * 1.5 - 0.75;
             ms.position.y = (z1 + (z2 / 2)) * 1.0;
             ms.position.z = (y1 + (y2 / 2)) * 1.5 - 0.75;
-            msg.add(ms);*/
-            ms1 = drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, 0, 'wall-deco', mat, rnd, 129.22);
-            ms1 = drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, 1, 'wall-deco', mat, rnd, 129.22);
-            ms1 = drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, 2, 'wall-deco', mat, rnd, 129.22);
-            ms1 = drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, 3, 'wall-deco', mat, rnd, 129.22);
+            ms.rotation.y = (-(d + 2) * 90) * Math.PI / 180;
+            msg.add(ms);
             break;
 
             case 'door':
-            ms1 = drawObject(msg, x, y, x1 + x2 * 0.1, y1 + (y2 * 0.4), z1, x2 * 0.8, y2 * 0.2, z2, 0, 'box', mat, rnd, 356.11);
-            ms1 = drawObject(msg, x, y, x1 + 0.9, y1, z1, x2, y2, z2, 0, 'box', 'wall', rnd, 129.22);
-            ms1 = drawObject(msg, x, y, x1 - 0.9, y1, z1, x2, y2, z2, 0, 'box', 'wall', rnd, 129.22);
+            ms1 = drawObject(msg, x, y, x1 + x2 * 0.1, y1, z1, x2 * 0.8, y2, z2, d, 'box', mat, rnd);
+            ms1 = drawObject(msg, x, y, (x1 + dir[d3].x) * 0.9, (y1 + dir[d3].y) * 0.9, z1, x2, y2, z2, d, 'box', 'wall', rnd);
+            ms1 = drawObject(msg, x, y, (x1 + dir[d1].x) * 0.9, (y1 + dir[d1].y) * 0.9, z1, x2, y2, z2, d, 'box', 'wall', rnd);
             break;
 
             case 'door-open':
-            ms1 = drawObject(msg, x, y, x1 + x2 * 0.1, y1 + (y2 * 0.2), z1 + z2 * 0.8, x2 * 0.8, y2 * 0.6, z2, 0, 'box', mat, rnd, 356.11);
-            ms1 = drawObject(msg, x, y, x1 + 0.9, y1, z1, x2, y2, z2, 0, 'box', 'wall', rnd, 129.22);
-            ms1 = drawObject(msg, x, y, x1 - 0.9, y1, z1, x2, y2, z2, 0, 'box', 'wall', rnd, 129.22);
+            ms1 = drawObject(msg, x, y, x1 + x2 * 0.1, y1, z1 + z2 * 0.8, x2 * 0.8, y2, z2, d, 'box', mat, rnd);
+            ms1 = drawObject(msg, x, y, (x1 + dir[d3].x) * 0.9, (y1 + dir[d3].y) * 0.9, z1, x2, y2, z2, d, 'box', 'wall', rnd);
+            ms1 = drawObject(msg, x, y, (x1 + dir[d1].x) * 0.9, (y1 + dir[d1].y) * 0.9, z1, x2, y2, z2, d, 'box', 'wall', rnd);
             break;
 
             case 'floor-ceil':
-            ms1 = drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, 0, 'floor', mat, rnd, 51.33);
-            ms1 = drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, 0, 'ceil', mat, rnd, 631.11);
+            ms1 = drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, 0, 'floor', mat, rnd);
+            ms1 = drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, 0, 'ceil', mat, rnd);
             break;
 
-            case 'stairs-up':
-            ms1 = drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, 0, 'stairs', mat, rnd, 129.22);
-            ms1 = drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, 0, 'floor', 'floor', rnd, 129.22);
-            ms1 = drawObject(msg, x, y, x1 - 1, y1, z1 + 1, x2, y2, z2, 0, 'box', 'wall', rnd, 129.22);
-            ms1 = drawObject(msg, x, y, x1 + 1, y1, z1 + 1, x2, y2, z2, 0, 'box', 'wall', rnd, 129.22);
-            ms1 = drawObject(msg, x, y, x1, y1 + 1, z1 + 1, x2, y2, z2, 0, 'box', 'wall', rnd, 129.22);
-            break;
-
-            case 'stairs-down':
-            ms1 = drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, 0, 'stairs', mat, rnd, 129.22);
-            ms1 = drawObject(msg, x, y, x1, y1, z1 + 1, x2, y2, z2, 0, 'ceil', 'floor', rnd, 129.22);
-            ms1 = drawObject(msg, x, y, x1 - 1, y1, z1, x2, y2, z2, 0, 'box', 'wall', rnd, 129.22);
-            ms1 = drawObject(msg, x, y, x1 + 1, y1, z1, x2, y2, z2, 0, 'box', 'wall', rnd, 129.22);
-            break;
-            
             case 'wall-deco':
             var g = new THREE.PlaneBufferGeometry(x2, y2, 1, 1);
-            ms = new THREE.Mesh(g, tdTexture[mat][rand(Math.floor(origin.f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), seed, tdTexture[mat].length)].material);
+            ms = new THREE.Mesh(g, tdTexture[mat][rand(Math.floor(origin.f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), 860.97, tdTexture[mat].length)].material);
             ms.scale.set(1.5, 1.0, 1.0);
-            ms.position.set((z1 + (x2 / 2)) * 1.5 - 0.75, (z1 + (z2 / 2)) * 1.0, (y1 + (y2 / 2)) * 1.5 - 0.75);//(0, 0.5, 0);
+            ms.position.set(0, 0.5, 0);
             ms.rotation.y = (-(d + 2) * 90) * Math.PI / 180;
-            ms.translateZ(y2 * 0.75);
+            ms.translateZ(0.751);
             msg.add(ms);
             break;
 
             case 'floor':
             var g = new THREE.PlaneBufferGeometry(x2, y2, 1, 1);
-            ms = new THREE.Mesh(g, tdTexture[mat][rand(Math.floor(origin.f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), seed, tdTexture[mat].length)].material);
+            ms = new THREE.Mesh(g, tdTexture[mat][rand(Math.floor(origin.f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), 51.33, tdTexture[mat].length)].material);
             ms.scale.set(1.5, 1.5, 1.0);
             ms.position.set((x1 + (x2 / 2)) * 1.5 - 0.75, (z1 + (z2 / 2)) * 1.0 - 0.5, (y1 + (y2 / 2)) * 1.5 - 0.75);
             ms.rotation.y = (-(d + 2) * 90) * Math.PI / 180;
@@ -315,7 +314,7 @@ function drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, d, type, mat, rnd, seed) 
 
             case 'ceil':
             var g = new THREE.PlaneBufferGeometry(x2, y2, 1, 1);
-            ms = new THREE.Mesh(g, tdTexture[mat][rand(Math.floor(origin.f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), seed, tdTexture[mat].length)].material);
+            ms = new THREE.Mesh(g, tdTexture[mat][rand(Math.floor(origin.f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), 51.33, tdTexture[mat].length)].material);
             ms.scale.set(1.5, 1.5, 1.0);
             ms.position.set((x1 + (x2 / 2)) * 1.5 - 0.75, (z1 + (z2 / 2)) * 1.0 + 0.5, (y1 + (y2 / 2)) * 1.5 - 0.75);
             ms.rotation.y = (-(d + 2) * 90) * Math.PI / 180;
@@ -325,17 +324,32 @@ function drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, d, type, mat, rnd, seed) 
 
             case 'stairs':
             var g = new THREE.PlaneBufferGeometry(x2, y2, 1, 1);
-            ms = new THREE.Mesh(g, tdTexture[mat][rand(Math.floor(origin.f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), seed, tdTexture[mat].length)].material);
+            ms = new THREE.Mesh(g, tdTexture[mat][rand(Math.floor(origin.f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), 129.22, tdTexture[mat].length)].material);
             ms.scale.set(1.5, 1.8027, 1.0);
             ms.position.set((x1 + (x2 / 2)) * 1.5 - 0.75, (z1 + (z2 / 2)) * 1.0, (y1 + (y2 / 2)) * 1.5 - 0.75);
             ms.rotation.y = (-(d + 2) * 90) * Math.PI / 180;
-            ms.rotateX(-123.39 * Math.PI / 180);
+            ms.rotateX(-56.31 * Math.PI / 180);
             msg.add(ms);
+            break;
+
+            case 'stairs-up':
+            ms1 = drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, d, 'stairs', mat, rnd);
+            ms1 = drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, d, 'floor', 'floor', rnd);
+            ms1 = drawObject(msg, x, y, x1 + dir[d].x, y1 + dir[d].y, z1 + 1, x2, y2, z2, d, 'box', 'wall', rnd);
+            ms1 = drawObject(msg, x, y, x1 + dir[d1].x, y1 + dir[d1].y, z1 + 1, x2, y2, z2, d, 'box', 'wall', rnd);
+            ms1 = drawObject(msg, x, y, x1 + dir[d3].x, y1 + dir[d3].y, z1 + 1, x2, y2, z2, d, 'box', 'wall', rnd);
+            break;
+
+            case 'stairs-down':
+            ms1 = drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, d, 'stairs', mat, rnd);
+            ms1 = drawObject(msg, x, y, x1, y1, z1 + 1, x2, y2, z2, d, 'ceil', 'floor', rnd);
+            ms1 = drawObject(msg, x, y, x1 + dir[d1].x, y1 + dir[d1].y, z1, x2, y2, z2, d, 'box', 'wall', rnd);
+            ms1 = drawObject(msg, x, y, x1 + dir[d3].x, y1 + dir[d3].y, z1, x2, y2, z2, d, 'box', 'wall', rnd);
             break;
 
             case 'cylinder':
             g = new THREE.CylinderGeometry(x2 * 0.5, y2 * 0.5, z2, 16);
-            ms = new THREE.Mesh(g, tdTexture[mat][rand(Math.floor(origin.f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), seed, tdTexture[mat].length)].material);
+            ms = new THREE.Mesh(g, tdTexture[mat][rand(Math.floor(origin.f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), 129.22, tdTexture[mat].length)].material);
             ms.scale.set(1.5, 1.0, 1.5);
             ms.position.set((x1 + (x2 / 2)) * 1.5 - 0.75, (z1 + (z2 / 2)) * 1.0, (y1 + (y2 / 2)) * 1.5 - 0.75);
             //ms.rotation.y = (-(d + 2) * 90) * Math.PI / 180;
@@ -369,7 +383,7 @@ function tdMoveCamera(xo, yo) {
                 camera.position.x = (this.x - origin.x + xo) * 1.5;
                 camera.position.z = (this.y - origin.y + yo) * 1.5;
                 camera.translateZ(1.25);
-                
+
                 //light.position.x = 0;
                 //light.position.y = -0.5;
                 //light.position.z = 0;
@@ -459,7 +473,7 @@ function fileExist(urlToFile) {
     var xhr = new XMLHttpRequest();
     xhr.open('HEAD', urlToFile, false);
     xhr.send();
-     
+
     if (xhr.status == "404") {
         return false;
     } else {
