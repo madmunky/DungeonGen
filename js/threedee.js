@@ -4,7 +4,7 @@ var tdScreenWidth = 800;
 var tdScreenHeight = 600;
 var scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0x000000, 1, 18);
-var camera = new THREE.PerspectiveCamera( 35, tdScreenWidth / tdScreenHeight, 0.5, 18 ); //1.5, 18
+var camera = new THREE.PerspectiveCamera( 35, tdScreenWidth / tdScreenHeight, 1, 18 ); //1.5, 18
 scene.add(camera);
 mirrorCubeCamera = new THREE.CubeCamera( 0.1, 18, 512 );
 scene.add( mirrorCubeCamera );
@@ -40,7 +40,8 @@ var tdTexture = {
     'floor': [{
         image: 'floor',
         bump: true,
-        multi: true
+        multi: true,
+        shadow: false
     }],
     'pit': [{
         color: '#000000',
@@ -97,6 +98,8 @@ function startEngine() {
 }
 
 function render() {
+    $('#debug').html('Camera: X ' + camera.position.x.toFixed(2) + ', Y ' + camera.position.y.toFixed(2) + ', Z ' + camera.position.z.toFixed(2) + ', RX ' + camera.rotation.x.toFixed(2) + ', RY ' + camera.rotation.y.toFixed(2) + ', RZ ' + camera.rotation.z.toFixed(2) + '<br>');
+    $('#debug').append('Light: X ' + light.position.x.toFixed(2) + ', Y ' + light.position.y.toFixed(2) + ', Z ' + light.position.z.toFixed(2) + ', RX ' + light.rotation.x.toFixed(2) + ', RY ' + light.rotation.y.toFixed(2) + ', RZ ' + light.rotation.z.toFixed(2));
     TWEEN.update();
     requestAnimationFrame(render);
     renderer.render(scene, camera);
@@ -189,6 +192,7 @@ function tdCreateLight() {
     light.shadowCameraNear = true;
     light.shadowMapWidth = 1024;
     light.shadowMapHeight = 1024;
+    light.target = camera;
 
     scene.add(ambientLight);
     camera.add(light);
@@ -228,9 +232,9 @@ function tdCreateObject(x, y) {
     var ob = getFloor(x, y).split(',');
     var msg = new THREE.Object3D();
     var seed = 0;
-    msg.position.x = (x - origin.x) * 1.5;
+    msg.position.x = x * 1.5;
     msg.position.y = 0;//(z1 + (z2 / 2)) * 1.0;
-    msg.position.z = (y - origin.y) * 1.5;
+    msg.position.z = y * 1.5;
     msg.rotation.y = (-(map[x - origin.x + viewSize / 2][y - origin.y + viewSize / 2].rotation + 2) * 90) * Math.PI / 180;
 
     /*g = new THREE.BoxGeometry( 0.02, 0.02, 0.02, 10 );
@@ -247,27 +251,28 @@ function tdCreateObject(x, y) {
         var rnd = 1;
         //if(ob[o] !== 'floor') {
             switch(ob[o].replace(/[0-9]/g, '')) {
-                case 'wall': x1 = 0, y1 = 0, z1 = 0.001, x2 = 1, y2 = 1, z2 = 0.998; type = 'box'; mat = 'wall'; rnd = 100; break;
+                case 'wall': x1 = 0, y1 = 0, z1 = 0, x2 = 1, y2 = 1, z2 = 1; type = 'box4'; mat = 'wall'; rnd = 100; seed = 129.22; break;
                 case 'floor': x1 = 0, y1 = 0, z1 = 0, x2 = 1, y2 = 1, z2 = 1; type = 'floor-ceil'; mat = 'floor'; rnd = 100; break;
-                case 'wallsecret': x1 = 0, y1 = 0, z1 = 0.001, x2 = 1, y2 = 1, z2 = 0.998; type = 'box'; mat = 'wallsecret'; break;
-                case 'pillar': x1 = 0.3, y1 = 0.3, z1 = 0.001, x2 = 0.4, y2 = 0.4, z2 = 0.998; type = 'cylinder'; mat = 'wall'; rnd = 100; break;
-                case 'door': x1 = 0, y1 = 0.45, z1 = 0.001, x2 = 1, y2 = 0.1, z2 = 0.998; type = 'door'; mat = 'door'; rnd = 100; break;
-                case 'door-open': x1 = 0, y1 = 0.45, z1 = 0.001, x2 = 1, y2 = 0.1, z2 = 0.998; type = 'door-open'; mat = 'door'; rnd = 100; break;
+                case 'wallsecret': x1 = 0, y1 = 0, z1 = 0, x2 = 1, y2 = 1, z2 = 1; type = 'box'; mat = 'wallsecret'; seed = 129.22; break;
+                case 'pillar': x1 = 0.3, y1 = 0.3, z1 = 0, x2 = 0.4, y2 = 0.4, z2 = 1; type = 'cylinder'; mat = 'wall'; rnd = 100; seed = 129.22; break;
+                case 'door': x1 = 0, y1 = 0.45, z1 = 0, x2 = 1, y2 = 0.1, z2 = 1; type = 'door'; mat = 'door'; rnd = 100; break;
+                case 'door-open': x1 = 0, y1 = 0.45, z1 = 0, x2 = 1, y2 = 0.1, z2 = 1; type = 'door-open'; mat = 'door'; rnd = 100; break;
                 case 'pit': x1 = 0.2, y1 = 0.2, z1 = 0.001, x2 = 0.6, y2 = 0.6, z2 = 1; type = 'floor'; mat = 'pit'; break;
-                case 'stairsup': x1 = 0, y1 = 0, z1 = 0.001, x2 = 1, y2 = 1, z2 = 0.998; type = 'stairs-up'; mat = 'wall'; rnd = 100; break;
-                case 'stairsdown': x1 = 0, y1 = 0, z1 = -0.999, x2 = 1, y2 = 1, z2 = 0.998; type = 'stairs-down'; mat = 'wall'; rnd = 100; break;
-                case 'wall-deco': x1 = 0, y1 = 0, z1 = 0, x2 = 1, y2 = 1.001, z2 = 1; type = 'wall-deco'; mat = 'wall-deco'; seed = 860.97; break;
+                case 'pit-ceil': x1 = 0.2, y1 = 0.2, z1 = -0.001, x2 = 0.6, y2 = 0.6, z2 = 1; type = 'ceil'; mat = 'pit'; break;
+                case 'stairsup': x1 = 0, y1 = 0, z1 = 0, x2 = 1, y2 = 1, z2 = 1; type = 'stairs-up'; mat = 'wall'; rnd = 100; break;
+                case 'stairsdown': x1 = 0, y1 = 0, z1 = -1, x2 = 1, y2 = 1, z2 = 1; type = 'stairs-down'; mat = 'wall'; rnd = 100; break;
+                case 'wall-deco': x1 = 0, y1 = 1.001, z1 = 0, x2 = 1, y2 = 1, z2 = 1; type = 'wall-deco'; mat = 'wall-deco'; seed = 860.97; break;
                 case 'floor-deco': x1 = 0, y1 = 0, z1 = 0.001, x2 = 1, y2 = 1, z2 = 1; type = 'floor'; mat = 'floor-deco'; seed = 860.97; break;
                 default: break;
             }
-            drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, 0, type, mat, rnd, seed);
+            drawObject(msg, origin.f, x, y, x1, y1, z1, x2, y2, z2, 0, type, mat, rnd, seed);
         //}
     }
     scene.add(msg);
     return msg;
 }
 
-function drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, d, type, mat, rnd, seed) {
+function drawObject(msg, f, x, y, x1, y1, z1, x2, y2, z2, d, type, mat, rnd, seed) {
     var ms = null;
     var g = null;
     d1 = (d + 1) % 4;
@@ -276,65 +281,29 @@ function drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, d, type, mat, rnd, seed) 
     if(mat !== '' && type !== '') {
         switch(type) {
             case 'box':
-            /*g = new THREE.BoxGeometry( x2, z2, y2, 1 );
-            ms = new THREE.Mesh(g, tdTexture[mat][rand(Math.floor(origin.f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), 129.22, tdTexture[mat].length)].material);
+            g = new THREE.BoxGeometry( x2, z2, y2, 1 );
+            ms = new THREE.Mesh(g, tdTexture[mat][rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), seed, tdTexture[mat].length)].material);
             ms.scale.set(1.5, 1.0, 1.5);
             ms.rotation.y = (-(d + 2) * 90) * Math.PI / 180;
             ms.position.x = (x1 + (x2 / 2)) * 1.5 - 0.75;
             ms.position.y = (z1 + (z2 / 2)) * 1.0;
             ms.position.z = (y1 + (y2 / 2)) * 1.5 - 0.75;
-            msg.add(ms);*/
-            ms1 = drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, 0, 'wall-deco', mat, rnd, 129.22);
-            ms1 = drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, 1, 'wall-deco', mat, rnd, 129.22);
-            ms1 = drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, 2, 'wall-deco', mat, rnd, 129.22);
-            ms1 = drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, 3, 'wall-deco', mat, rnd, 129.22);
-            break;
-
-            case 'door':
-            ms1 = drawObject(msg, x, y, x1 + x2 * 0.1, y1 + (y2 * 0.4), z1, x2 * 0.8, y2 * 0.2, z2, 0, 'box', mat, rnd, 356.11);
-            ms1 = drawObject(msg, x, y, x1 + 0.9, y1, z1, x2, y2, z2, 0, 'box', 'wall', rnd, 129.22);
-            ms1 = drawObject(msg, x, y, x1 - 0.9, y1, z1, x2, y2, z2, 0, 'box', 'wall', rnd, 129.22);
-            break;
-
-            case 'door-open':
-            ms1 = drawObject(msg, x, y, x1 + x2 * 0.1, y1 + (y2 * 0.2), z1 + z2 * 0.8, x2 * 0.8, y2 * 0.6, z2, 0, 'box', mat, rnd, 356.11);
-            ms1 = drawObject(msg, x, y, x1 + 0.9, y1, z1, x2, y2, z2, 0, 'box', 'wall', rnd, 129.22);
-            ms1 = drawObject(msg, x, y, x1 - 0.9, y1, z1, x2, y2, z2, 0, 'box', 'wall', rnd, 129.22);
-            break;
-
-            case 'floor-ceil':
-            ms1 = drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, 0, 'floor', mat, rnd, 51.33);
-            ms1 = drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, 0, 'ceil', mat, rnd, 631.11);
-            break;
-
-            case 'stairs-up':
-            ms1 = drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, 0, 'stairs', mat, rnd, 129.22);
-            ms1 = drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, 0, 'floor', 'floor', rnd, 129.22);
-            ms1 = drawObject(msg, x, y, x1 - 1, y1, z1 + 1, x2, y2, z2, 0, 'box', 'wall', rnd, 129.22);
-            ms1 = drawObject(msg, x, y, x1 + 1, y1, z1 + 1, x2, y2, z2, 0, 'box', 'wall', rnd, 129.22);
-            ms1 = drawObject(msg, x, y, x1, y1 + 1, z1 + 1, x2, y2, z2, 0, 'box', 'wall', rnd, 129.22);
-            break;
-
-            case 'stairs-down':
-            ms1 = drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, 0, 'stairs', mat, rnd, 129.22);
-            ms1 = drawObject(msg, x, y, x1, y1, z1 + 1, x2, y2, z2, 0, 'ceil', 'floor', rnd, 129.22);
-            ms1 = drawObject(msg, x, y, x1 - 1, y1, z1, x2, y2, z2, 0, 'box', 'wall', rnd, 129.22);
-            ms1 = drawObject(msg, x, y, x1 + 1, y1, z1, x2, y2, z2, 0, 'box', 'wall', rnd, 129.22);
+            msg.add(ms);
             break;
             
             case 'wall-deco':
-            var g = new THREE.PlaneBufferGeometry(x2, y2, 1, 1);
-            ms = new THREE.Mesh(g, tdTexture[mat][rand(Math.floor(origin.f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), seed, tdTexture[mat].length)].material);
+            var g = new THREE.PlaneGeometry(x2, y2, 1, 1);
+            ms = new THREE.Mesh(g, tdTexture[mat][rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), seed, tdTexture[mat].length)].material);
             ms.scale.set(1.5, 1.0, 1.0);
-            ms.position.set((z1 + (x2 / 2)) * 1.5 - 0.75, (z1 + (z2 / 2)) * 1.0, (y1 + (y2 / 2)) * 1.5 - 0.75);//(0, 0.5, 0);
+            ms.position.set((x1 + (x2 / 2)) * 1.5 - 0.75, (z1 + (z2 / 2)) * 1.0, 0);//(0, 0.5, 0);
             ms.rotation.y = (-(d + 2) * 90) * Math.PI / 180;
-            ms.translateZ(y2 * 0.75);
+            ms.translateZ(y1 * 0.75);
             msg.add(ms);
             break;
 
             case 'floor':
-            var g = new THREE.PlaneBufferGeometry(x2, y2, 1, 1);
-            ms = new THREE.Mesh(g, tdTexture[mat][rand(Math.floor(origin.f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), seed, tdTexture[mat].length)].material);
+            var g = new THREE.PlaneGeometry(x2, y2, 1, 1);
+            ms = new THREE.Mesh(g, tdTexture[mat][rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor((x + rnd / 2) / rnd), Math.floor((y + rnd / 2) / rnd), seed, tdTexture[mat].length)].material);
             ms.scale.set(1.5, 1.5, 1.0);
             ms.position.set((x1 + (x2 / 2)) * 1.5 - 0.75, (z1 + (z2 / 2)) * 1.0 - 0.5, (y1 + (y2 / 2)) * 1.5 - 0.75);
             ms.rotation.y = (-(d + 2) * 90) * Math.PI / 180;
@@ -343,8 +312,8 @@ function drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, d, type, mat, rnd, seed) 
             break;
 
             case 'ceil':
-            var g = new THREE.PlaneBufferGeometry(x2, y2, 1, 1);
-            ms = new THREE.Mesh(g, tdTexture[mat][rand(Math.floor(origin.f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), seed, tdTexture[mat].length)].material);
+            var g = new THREE.PlaneGeometry(x2, y2, 1, 1);
+            ms = new THREE.Mesh(g, tdTexture[mat][rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor((x + rnd / 2) / rnd), Math.floor((y + rnd / 2) / rnd), seed, tdTexture[mat].length)].material);
             ms.scale.set(1.5, 1.5, 1.0);
             ms.position.set((x1 + (x2 / 2)) * 1.5 - 0.75, (z1 + (z2 / 2)) * 1.0 + 0.5, (y1 + (y2 / 2)) * 1.5 - 0.75);
             ms.rotation.y = (-(d + 2) * 90) * Math.PI / 180;
@@ -353,22 +322,60 @@ function drawObject(msg, x, y, x1, y1, z1, x2, y2, z2, d, type, mat, rnd, seed) 
             break;
 
             case 'stairs':
-            var g = new THREE.PlaneBufferGeometry(x2, y2, 1, 1);
-            ms = new THREE.Mesh(g, tdTexture[mat][rand(Math.floor(origin.f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), seed, tdTexture[mat].length)].material);
+            /*var g = new THREE.PlaneBufferGeometry(x2, y2, 1, 1);
+            ms = new THREE.Mesh(g, tdTexture[mat][rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), seed, tdTexture[mat].length)].material);
             ms.scale.set(1.5, 1.8027, 1.0);
             ms.position.set((x1 + (x2 / 2)) * 1.5 - 0.75, (z1 + (z2 / 2)) * 1.0, (y1 + (y2 / 2)) * 1.5 - 0.75);
-            ms.rotation.y = (-(d + 2) * 90) * Math.PI / 180;
-            ms.rotateX(-123.39 * Math.PI / 180);
-            msg.add(ms);
+            ms.rotateX(-56.61 * Math.PI / 180);
+            msg.add(ms);*/
+            for(var s = 0; s < 10; s++) {
+                ms1 = drawObject(msg, f, x, y, x1 + 0.001, -0.998 + y1 + s * 0.1, z1 - s * 0.1 + 0.001, x2 * 0.998, y2 * 0.998, z2 * 0.998, 0, 'box', 'wall', rnd, 129.22);
+            }
             break;
 
             case 'cylinder':
             g = new THREE.CylinderGeometry(x2 * 0.5, y2 * 0.5, z2, 16);
-            ms = new THREE.Mesh(g, tdTexture[mat][rand(Math.floor(origin.f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), seed, tdTexture[mat].length)].material);
+            ms = new THREE.Mesh(g, tdTexture[mat][rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), seed, tdTexture[mat].length)].material);
             ms.scale.set(1.5, 1.0, 1.5);
             ms.position.set((x1 + (x2 / 2)) * 1.5 - 0.75, (z1 + (z2 / 2)) * 1.0, (y1 + (y2 / 2)) * 1.5 - 0.75);
-            //ms.rotation.y = (-(d + 2) * 90) * Math.PI / 180;
             msg.add(ms);
+            break;
+
+            case 'box4':
+            ms1 = drawObject(msg, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'box', mat, rnd, 129.22);
+            ms1.geometry.faces.splice(4, 4); //remove top and bottom
+            break;
+
+            case 'door':
+            ms1 = drawObject(msg, f, x, y, x1 + x2 * 0.1, y1 + (y2 * 0.4), z1, x2 * 0.8, y2 * 0.2, z2, 0, 'box', mat, rnd, 356.11);
+            ms1 = drawObject(msg, f, x, y, x1 + 0.9, y1, z1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
+            ms1 = drawObject(msg, f, x, y, x1 - 0.9, y1, z1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
+            break;
+
+            case 'door-open':
+            ms1 = drawObject(msg, f, x, y, x1 + x2 * 0.1, y1 + (y2 * 0.2), z1 + z2 * 0.8, x2 * 0.8, y2 * 0.6, z2, 0, 'box', mat, rnd, 356.11);
+            ms1 = drawObject(msg, f, x, y, x1 + 0.9, y1, z1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
+            ms1 = drawObject(msg, f, x, y, x1 - 0.9, y1, z1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
+            break;
+
+            case 'floor-ceil':
+            ms1 = drawObject(msg, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'floor', mat, rnd, 51.33);
+            ms1 = drawObject(msg, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'ceil', mat, rnd, 631.11);
+            break;
+
+            case 'stairs-up':
+            ms1 = drawObject(msg, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'stairs', mat, rnd, 129.22);
+            ms1 = drawObject(msg, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'floor', 'floor', rnd, 51.33);
+            ms1 = drawObject(msg, f + 1, x, y, x1 - 1, y1, z1 + 1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
+            ms1 = drawObject(msg, f + 1, x, y, x1 + 1, y1, z1 + 1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
+            ms1 = drawObject(msg, f + 1, x, y + 1, x1, y1 + 1, z1 + 1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
+            break;
+
+            case 'stairs-down':
+            ms1 = drawObject(msg, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'stairs', mat, rnd, 129.22);
+            ms1 = drawObject(msg, f, x, y, x1, y1, z1 + 1, x2, y2, z2, 0, 'ceil', 'floor', rnd, 631.11);
+            ms1 = drawObject(msg, f - 1, x - 1, y, x1 - 1, y1, z1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
+            ms1 = drawObject(msg, f - 1, x + 1, y, x1 + 1, y1, z1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
             break;
         }
         if(ms !== null) {
@@ -390,13 +397,13 @@ function tdMoveCamera(xo, yo) {
         //light.position.x = 0;
         //light.position.z = 0;
         //light.translateZ(1.45);
-        initField();
+        initField(d);
         new TWEEN.Tween( {x: origin.x - xo, y: origin.y - yo} )
             .to( {x: origin.x, y: origin.y}, 400)
             .easing(TWEEN.Easing.Sinusoidal.InOut)
             .onUpdate(function() {
-                camera.position.x = (this.x - origin.x + xo) * 1.5;
-                camera.position.z = (this.y - origin.y + yo) * 1.5;
+                camera.position.x = this.x * 1.5;
+                camera.position.z = this.y * 1.5;
                 camera.translateZ(1.25);
                 
                 //light.position.x = 0;
@@ -426,15 +433,15 @@ function tdRotateCamera(d) {
         .to( {d: do1 + d1}, 400)
         .easing(TWEEN.Easing.Sinusoidal.InOut)
         .onUpdate(function() {
-            camera.position.x = 0;
-            camera.position.z = 0;
+            camera.position.x = origin.x * 1.5;
+            camera.position.z = origin.y * 1.5;
             camera.rotation.y = this.d;
             camera.translateZ(1.25);
 
-            //light.position.x = 0;
-            //light.position.z = 0;
-            //light.rotation.y = this.d;
-            //light.translateZ(0.3);
+            /*light.position.x = 0;
+            light.position.z = 0;
+            light.rotation.y = 0;
+            light.translateZ(0.3);*/
         })
         .onComplete(function() {
             keysFrozen = false;
@@ -469,17 +476,13 @@ function tdClearWorld() {
 }
 
 function tdUpdateCamera() {
-    camera.position.x = 0;
-    camera.position.z = 0;
+    camera.position.x = origin.x * 1.5;
+    camera.position.z = origin.y * 1.5;
     camera.rotation.y = -Math.PI / 2 * origin.d;
     camera.position.y = 0.5;
     camera.translateZ(1.25);
-
-    light.position.x = 0;
-    light.position.y = -0.5;
-    light.position.z = 0;
-    //light.rotation.y = -Math.PI / 2 * origin.d;
-    light.translateZ(0.3);
+    
+    light.position.set(0, 0, 0.4);
 
     $('body input#coordinates').val('F: ' + origin.f + ', X: ' + origin.x + ', Y: ' + origin.y + ', D: ' + origin.d);
 }

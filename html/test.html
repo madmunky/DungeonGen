@@ -14,16 +14,11 @@
     <script type="text/javascript" src="../js/three.min.js"></script>
     <script type="text/javascript" src="../js/tween.min.js"></script>
     <script type="text/javascript" src="../js/stats.min.js"></script>
-    <style>
-    	#map, #view {
-    		float: left;
-    	}
-    </style>
 	<script type="text/javascript">
 	var dir = [];
 	dir = [{x: 0, y: -1}, {x: 1, y: 0}, {x: 0, y: 1}, {x: -1, y: 0}];
 	var viewSize = 40;
-	var floorSize = 10;
+	var floorSize = 12;
 	var origin = {f: Math.floor(Math.random() * 100000) - 50000, x: Math.floor(Math.random() * 100000) - 50000, y: Math.floor(Math.random() * 100000) - 50000, d: Math.floor(Math.random() * 4)};
 	var keysFrozen = false;
 	//var origin = {f: 0, x: 0, y: 0};
@@ -90,6 +85,7 @@
 			//F: 27062, X: -13494, Y: 41160, D: 0
 			//F: 19272, X: 30367, Y: -22652, D: 3
 			//F: 22600, X: -23948, Y: -24524, D: 0
+			//F: 22969, X: 4298, Y: 27901, D: 0
 			var c = $(this).val().toUpperCase();
 			c = c.replace(/ /g, '').split(',');
 			for(var i = 0; i < c.length; i++) {
@@ -113,6 +109,15 @@
 	});
 	
 	function initField() {
+		setField(origin.x - Math.floor(viewSize / 2), origin.y - Math.floor(viewSize / 2), origin.x - Math.floor(viewSize / 2) + viewSize, origin.y - Math.floor(viewSize / 2) + viewSize);
+		generateField(origin.x - Math.floor(viewSize / 2), origin.y - Math.floor(viewSize / 2), origin.x - Math.floor(viewSize / 2) + viewSize, origin.y - Math.floor(viewSize / 2) + viewSize);
+	}
+
+	function updateField(d) {
+		var sqr[0][0, 0, viewSize - 1, 1]; // TODO
+		var sqr[1][0, 0, viewSize - 1];
+		var sqr[2][0, 0, viewSize - 1];
+		var sqr[3][0, 0, viewSize - 1];
 		setField(origin.x - Math.floor(viewSize / 2), origin.y - Math.floor(viewSize / 2), origin.x - Math.floor(viewSize / 2) + viewSize, origin.y - Math.floor(viewSize / 2) + viewSize);
 		generateField(origin.x - Math.floor(viewSize / 2), origin.y - Math.floor(viewSize / 2), origin.x - Math.floor(viewSize / 2) + viewSize, origin.y - Math.floor(viewSize / 2) + viewSize);
 	}
@@ -207,7 +212,7 @@
 				setFloor(x + dir[d2].x, y + dir[d2].y, 'wall2');
 				setFloor(x + dir[d3].x, y + dir[d3].y, 'wall2');
 			} else {
-				setFloor(x, y, 'floor,corridor');
+				setFloor(x, y, 'floor,pit-ceil');
 			}
 		}
 		if(rand(origin.f - 1, x, y, 50) < 1) {
@@ -281,7 +286,7 @@
 						} else if(object[o] === 'wall2') {
 							drawRect(x, y, 0, 0, 0, 1, 1, 1, '#999999');
 						} else if(object[o] === 'wallsecret') {
-							drawRect(x, y, 0, 0, 0, 1, 1, 1, '#CCCCCC');
+							drawRect(x, y, 0, 0, 0, 1, 1, 1, '#AAAAAA');
 						} else if(object[o] === 'stairsup') {
 							drawRect(x, y, 0, 0, 0, 1, 1, 1, '#44FF44');
 						} else if(object[o] === 'stairsdown') {
@@ -298,6 +303,8 @@
 							drawRect(x, y, 0.2, 0.2, 0, 0.6, 0.6, 1, '#999999');
 						} else if(object[o] === 'pit') {
 							drawRect(x, y, 0.2, 0.2, 0, 0.6, 0.6, 0.01, '#000000');
+						} else if(object[o] === 'pit-ceil') {
+							drawRect(x, y, 0.2, 0.2, 0, 0.6, 0.6, 0.01, '#EEEEEE');
 						}
 					}
 					map[x - origin.x + viewSize / 2][y - origin.y + viewSize / 2].obj = ob;
@@ -391,11 +398,24 @@
 		return random(seedIndex) * 854345678.227;
 	}
 	</script>
+<style>
+	html, input[type=text] {
+		font-family: Arial;
+		font-size: 11px;
+	}
+	#map, #view {
+		float: left;
+	}
+	#view, #canvas, #coordinates, #debug {
+		margin: 0 10px 10px 0;
+	}
+</style>
 </head>
 <body style="background:#000000;">
 	<div id="map">
-		<canvas id="canvas"></canvas>
-		<p><input type="text" id="coordinates" value="" style="width:300px;"></p>
+		<canvas id="canvas"></canvas><br>
+		<input type="text" id="coordinates" value="" style="width:300px;"><br>
+		<p style="color: #fff;" id="debug"></p>
 	</div>
 	<div id="view"></div>
 </body>
