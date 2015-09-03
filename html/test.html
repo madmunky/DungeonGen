@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <title>Nieberg.nl</title>
+    <meta name="description" content="">
+    <meta name="author" content="">
+    <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+    <!--[if lt IE 9]>
+    <script src="//html5shim.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <script type="text/javascript" src="http://code.jquery.com/jquery-2.1.4.min.js"></script>
+    <script type="text/javascript" src="../js/three.min.js"></script>
+    <script type="text/javascript" src="../js/tween.min.js"></script>
+    <style>
+    	#map, #view {
+    		float: left;
+    	}
+    </style>
+	<script type="text/javascript">
+	var dir = [];
+	dir = [{x: 0, y: -1}, {x: 1, y: 0}, {x: 0, y: 1}, {x: -1, y: 0}];
+	var viewSize = 40;
+	var floorSize = 10;
+	var origin = {f: Math.floor(Math.random() * 100000) - 50000, x: Math.floor(Math.random() * 100000) - 50000, y: Math.floor(Math.random() * 100000) - 50000, d: Math.floor(Math.random() * 4)};
+	var keysFrozen = false;
+	//var origin = {f: 0, x: 0, y: 0};
+	var map, mutation;
+	var canvas;
+	var ctx;
+
+	$(function() {
+		canvas = document.getElementById("canvas");
+		ctx = canvas.getContext("2d");
+		ctx.canvas.width  = viewSize * floorSize;
+		ctx.canvas.height = viewSize * floorSize;
+		mutation = {};
+		initField();
+		tdDrawAll();
+	
+		$(document).keydown(function(e) {
+			if(!keysFrozen) {
+				var d = origin.d;
+				var d1 = (origin.d + 1) % 4;
+				var d2 = (origin.d + 2) % 4;
+				var d3 = (origin.d + 3) % 4;
+			    switch(e.which) {
+			        case 65:
+					tdMoveCamera(dir[d3].x, dir[d3].y); // left
+			        break;
+
+			        case 87:
+		        	tdMoveCamera(dir[d].x, dir[d].y); // up
+			        break;
+
+			        case 68:
+					tdMoveCamera(dir[d1].x, dir[d1].y); // right
+			        break;
+
+			        case 83:
+		        	tdMoveCamera(dir[d2].x, dir[d2].y); // down
+			        break;
+
+			        case 81: tdRotateCamera(-1); // rotate left
+			        break;
+
+			        case 69: tdRotateCamera(1); // rotate right
+			        break;
+
+			        case 33: origin.f++; initField(); tdDrawAll(); // page up
+			        break;
+
+			        case 34: origin.f--; initField(); tdDrawAll(); // page down
+			        break;
+
+			        case 32:
+		        	setFloor(origin.x + dir[d].x, origin.y + dir[d].y, 'floor,door-open', 'door');
+					tdDrawAll();
+			        break;
+
+			        default: return; // exit this handler for other keys
+			    }
+		    }
+		    e.preventDefault();
+		});
+		$('body input#coordinates').change(function() {
+			//F: -1347, X: -35708, Y: -561, D: 0
+			//F: 27062, X: -13494, Y: 41160, D: 0
+			//F: 19272, X: 30367, Y: -22652, D: 3
+			var c = $(this).val().toUpperCase();
+			c = c.replace(/ /g, '').split(',');
+			for(var i = 0; i < c.length; i++) {
+				var c1 = c[i].split(':');
+				if(c1.length === 2) {
+					if(c1[0] === 'F') {
+						origin.f = parseInt(c1[1]);
+					} else if(c1[0] === 'X') {
+						origin.x = parseInt(c1[1]);
+					} else if(c1[0] === 'Y') {
+						origin.y = parseInt(c1[1]);
+					} else if(c1[0] === 'D') {
+						origin.d = parseInt(c1[1]);
+					} 
+				}
+			}
+			initField();
+			tdDrawAll();
+			tdUpdateCamera();
+		});
+	});
+	
+	function initField() {
+		setField(origin.x - Math.floor(viewSize / 2), origin.y - Math.floor(viewSize / 2), origin.x - Math.floor(viewSize / 2) + viewSize, origin.y - Math.floor(viewSize / 2) + viewSize);
+		generateField(origin.x - Math.floor(viewSize / 2), origin.y - Math.floor(viewSize / 2), origin.x - Math.floor(viewSize / 2) + viewSize, origin.y - Math.floor(viewSize / 2) + viewSize);
+	}
+
+	function setField(x1, y1, x2, y2) {
+		if(typeof map === "undefined") {
+			map = [];
+			for(var x = 0; x < viewSize; x++) {
+				map[x] = [];
+				for(var y = 0; y < viewSize; y++) {
+					map[x][y] = { obj: 'wall', mesh: null, rotation: 0 };
+					setFloor(x + x1, y + y1, 'wall');
+				}
+			}
+		} else {
+			for(var x = 0; x < viewSize; x++) {
+				for(var y = 0; y < viewSize; y++) {
+					setFloor(x + x1, y + y1, 'wall');
+				}
+			}
+		}
+	}
+
+	function generateField(x1, y1, x2, y2) {
+		for(var y = Math.floor(y1 / 2) * 2; y <= Math.floor(y2 / 2) * 2; y+=2) {
+			for(var x = Math.floor(x1 / 2) * 2; x <= Math.floor(x2 / 2) * 2; x+=2) {
+				generateFloor(x, y);
+			}
+		}
+		for(var y = Math.floor(y1 / 2) * 2; y <= Math.floor(y2 / 2) * 2; y+=2) {
+			for(var x = Math.floor(x1 / 2) * 2; x <= Math.floor(x2 / 2) * 2; x+=2) {
+				generateStairs(x, y);
+			}
+		}
+		for(var y = y1; y <= y2; y++) {
+			for(var x = x1; x <= x2; x++) {
+				generateDeco(x, y);
+			}
+		}
+		ctx.fillStyle = '#FFFF00';
+		ctx.fillRect(viewSize / 2 * floorSize, viewSize / 2 * floorSize, floorSize, floorSize);
+	}
+
+	function generateFloor(x, y) {
+		//setFloor(x, y, 'test');
+		if(rand(origin.f, x + 1, y, 234.92, 10) === 0) {
+			setFloor(x + 1, y, 'floor,pillar', 'wall');
+		}
+		if(rand(origin.f, x, y + 1, 321.11, 10) === 0) {
+			setFloor(x, y + 1, 'floor,pillar', 'wall');
+		}
+		if(rand(origin.f, x + 1, y + 1, 477.47, 10) === 0) {
+			setFloor(x + 1, y + 1, 'floor,pillar', 'wall');
+		}
+		setFloor(x, y, 'floor,corridor', 'wall,pillar');
+		if(rand(origin.f, x, y, 4) === 0) {
+			setFloor(x + 1, y, 'floor,corridor', 'wall,pillar');
+		}
+		if(rand(origin.f, x, y, 4) === 1) {
+			setFloor(x, y + 1, 'floor,corridor', 'wall,pillar');
+		}
+		if(rand(origin.f, x, y, 4) === 2) {
+			setFloor(x - 1, y, 'floor,corridor', 'wall,pillar');
+		}
+		if(rand(origin.f, x, y, 4) === 3) {
+			setFloor(x, y - 1, 'floor,corridor', 'wall,pillar');
+		}
+		if(rand(origin.f, x, y, 833.23, 100) === 0) {
+			setFloor(x, y, 'floor,wall,wallsecret', 'wall');
+		}
+		if(rand(origin.f, x, y + 1, 923.01, 100) === 0) {
+			setFloor(x, y + 1, 'floor,wall,wallsecret', 'wall');
+		}
+		if(rand(origin.f, x + 1, y, 13.40, 100) === 0) {
+			setFloor(x + 1, y, 'floor,wall,wallsecret', 'wall');
+		}
+		if(rand(origin.f, x, y, 94.09, 8) === 0) {
+			drawRoom(x, y, rand(origin.f, x, y, 859.35, 3) * 2 + 1, rand(origin.f, x, y, 123.76, 3) * 2 + 1);
+		}
+	}
+
+	function generateStairs(x, y) {
+		if(rand(origin.f - 1, x, y, 50) >= 1 && rand(origin.f, x, y, 50) < 1) {
+			d = rand(origin.f, x, y, 4);
+			d1 = (d + 1) % 4;
+			d2 = (d + 2) % 4;
+			d3 = (d + 3) % 4;
+			if(rand(origin.f, x, y, 4) < 3) {
+				setFloor(x, y, 'stairsup', null, d);
+				setFloor(x + dir[d].x, y + dir[d].y, 'floor,corridor', 'wall,pillar,pit');
+				setFloor(x + dir[d1].x, y + dir[d1].y, 'wall2');
+				setFloor(x + dir[d2].x, y + dir[d2].y, 'wall2');
+				setFloor(x + dir[d3].x, y + dir[d3].y, 'wall2');
+			} else {
+				setFloor(x, y, 'floor,corridor');
+			}
+		}
+		if(rand(origin.f - 1, x, y, 50) < 1) {
+			d = (rand(origin.f - 1, x, y, 4) + 2) % 4;
+			d1 = (d + 1) % 4;
+			d2 = (d + 2) % 4;
+			d3 = (d + 3) % 4;
+			if(rand(origin.f - 1, x, y, 4) < 3) {
+				setFloor(x, y, 'stairsdown', null, d2);
+				setFloor(x + dir[d].x, y + dir[d].y, 'floor,corridor', 'wall,pillar,pit');
+				setFloor(x + dir[d1].x, y + dir[d1].y, 'wall2');
+				setFloor(x + dir[d2].x, y + dir[d2].y, 'wall2');
+				setFloor(x + dir[d3].x, y + dir[d3].y, 'wall2');
+			} else {
+				setFloor(x, y, 'floor,pit');
+			}
+		}
+	}
+
+	function generateDeco(x, y) {
+		if(hasFloor(x, y, 'wall')) {
+			if(rand(origin.f, x, y, 860.97, 4) === 0) {
+				setFloor(x, y, 'wall,wall-deco', null, rand(origin.f, x, y, 123.13, 4));
+			}
+		} else if(hasFloor(x, y, 'floor')) {
+			if(rand(origin.f, x, y, 860.97, 30) === 0) {
+				setFloor(x, y, 'floor,floor-deco', null, rand(origin.f, x, y, 123.13, 4));
+			}
+		}
+	}
+
+	function getFloor(x, y) {
+		if(x - origin.x + viewSize / 2 >= 0 && x - origin.x + viewSize / 2 < viewSize && y - origin.y + viewSize / 2 >= 0 && y - origin.y + viewSize / 2 < viewSize) {
+			return map[x - origin.x + viewSize / 2][y - origin.y + viewSize / 2].obj;
+		}
+		return 'floor';
+	}
+
+	function hasFloor(x, y, obf) {
+		var object = getFloor(x, y).split(',');
+		if(object.indexOf(obf) > -1) {
+			return true;
+		}
+		return false;
+	}
+
+	function setFloor(x, y, ob, a, d) {
+		if(x - origin.x + viewSize / 2 >= 0 && x - origin.x + viewSize / 2 < viewSize && y - origin.y + viewSize / 2 >= 0 && y - origin.y + viewSize / 2 < viewSize) {
+			var objectold = map[x - origin.x + viewSize / 2][y - origin.y + viewSize / 2].obj.split(',');
+			var allowedOn = [];
+			if(typeof a !== "undefined" && a !== null) {
+				var allowedOn = a.split(',');
+			}
+			for(var old = 0; old < objectold.length; old++) {
+				if(map[x - origin.x + viewSize / 2][y - origin.y + viewSize / 2] === null || allowedOn.length === 0 || allowedOn.indexOf(objectold[old]) > -1) {
+					var object = [];
+					if(typeof ob !== "undefined" && ob !== null) {
+						var object = ob.split(',');
+					}
+					for(o = 0; o < object.length; o++) {
+						if(object[o] === 'floor') {
+							drawRect(x, y, 0, 0, 0, 1, 1, 0, '#FFFFFF');
+						//} else if(object[o] === 'corridor') {
+						//	drawRect(x, y, 0, 0, 0, 1, 1, 0, '#EEEEFF');
+						} else if(object[o] === 'wall') {
+							drawRect(x, y, 0, 0, 0, 1, 1, 1, '#999999');
+						} else if(object[o] === 'wall2') {
+							drawRect(x, y, 0, 0, 0, 1, 1, 1, '#999999');
+						} else if(object[o] === 'wallsecret') {
+							drawRect(x, y, 0, 0, 0, 1, 1, 1, '#CCCCCC');
+						} else if(object[o] === 'stairsup') {
+							drawRect(x, y, 0, 0, 0, 1, 1, 1, '#44FF44');
+						} else if(object[o] === 'stairsdown') {
+							drawRect(x, y, 0, 0, 0, 1, 1, 1, '#FF8888');
+						} else if(object[o] === 'door') {
+							drawRect(x, y, 0, 0.4, 0, 1, 0.2, 1, '#bb8866');
+							drawRect(x, y, 0.4, 0, 0, 0.2, 1, 1, '#bb8866');
+						} else if(object[o] === 'door-open') {
+							drawRect(x, y, 0, 0.4, 0, 1, 0.2, 1, '#ffccaa');
+							drawRect(x, y, 0.4, 0, 0, 0.2, 1, 1, '#ffccaa');
+						} else if(object[o] === 'test') {
+							drawRect(x, y, 0, 0, 0, 1, 1, 1, '#FF88FF');
+						} else if(object[o] === 'pillar') {
+							drawRect(x, y, 0.2, 0.2, 0, 0.6, 0.6, 1, '#999999');
+						} else if(object[o] === 'pit') {
+							drawRect(x, y, 0.2, 0.2, 0, 0.6, 0.6, 0.01, '#000000');
+						}
+					}
+					map[x - origin.x + viewSize / 2][y - origin.y + viewSize / 2].obj = ob;
+					if(typeof d !== "undefined" && d !== null) {
+						map[x - origin.x + viewSize / 2][y - origin.y + viewSize / 2].rotation = d;
+					} else if(typeof map[x - origin.x + viewSize / 2][y - origin.y + viewSize / 2].rotation === "undefined" || map[x - origin.x + viewSize / 2][y - origin.y + viewSize / 2].rotation === null) {
+						map[x - origin.x + viewSize / 2][y - origin.y + viewSize / 2].rotation = 0;
+					}
+					break;
+				}
+			}
+		}
+	}
+
+	//draw recttancle on square, based on a size of 1
+	function drawRect(x, y, x1, y1, z1, x2, y2, z2, c) {
+		var xo = (x - origin.x + viewSize / 2);
+		var yo = (y - origin.y + viewSize / 2);
+		ctx.fillStyle = c;
+		ctx.fillRect(xo * floorSize + x1 * floorSize, yo * floorSize + y1 * floorSize, x2 * floorSize, y2 * floorSize);
+	}
+
+	function drawRoom(x1, y1, xs, ys) {
+		x1 = x1 - Math.floor(xs / 2) * 2;
+		y1 = y1 - Math.floor(ys / 2) * 2;
+		for(var y = y1; y < y1 + ys; y++) {
+			for(var x = x1; x < x1 + xs; x++) {
+				setFloor(x, y, 'floor', 'wall,corridor');
+			}
+		}
+		for(var y = y1; y < y1 + ys; y++) {
+			if(rand(origin.f, x1 - 1, y, 388.92, 3) < 1 && hasFloor(x1 - 1, y, 'corridor')) {
+				setFloor(x1 - 1, y, 'floor,door', 'corridor', 1);
+				setFloor(x1 - 1, y - 1, 'wall2');
+				setFloor(x1 - 1, y + 1, 'wall2');
+			}
+			if(rand(origin.f, x1 + xs, y, 287.45, 3) < 1 && hasFloor(x1 + xs, y, 'corridor')) {
+				setFloor(x1 + xs, y, 'floor,door', 'corridor', 1);
+				setFloor(x1 + xs, y - 1, 'wall2');
+				setFloor(x1 + xs, y + 1, 'wall2');
+			}
+		}
+		for(var x = x1; x < x1 + xs; x++) {
+			if(rand(origin.f, x, y1 - 1, 893.83, 3) < 1 && hasFloor(x, y1 - 1, 'corridor')) {
+				setFloor(x, y1 - 1, 'floor,door', 'corridor', 0);
+				setFloor(x - 1, y1 - 1, 'wall2');
+				setFloor(x + 1, y1 - 1, 'wall2');
+			}
+			if(rand(origin.f, x, y1 + ys, 117.97, 3) < 1 && hasFloor(x, y1 + ys, 'corridor')) {
+				setFloor(x, y1 + ys, 'floor,door', 'corridor', 0);
+				setFloor(x - 1, y1 + ys, 'wall2');
+				setFloor(x + 1, y1 + ys, 'wall2');
+			}
+		}
+	}
+
+	function floorAction(x, y) {
+		if(hasFloor(x, y, 'stairsup')) {
+			origin.f++; initField();
+		} else if(hasFloor(x, y, 'stairsdown')) {
+			origin.f--; initField();
+		} else if(hasFloor(x, y, 'pit')) {
+			origin.f--; initField(); floorAction(x, y);
+		}
+	}
+
+	function rand() {
+		var arg = Array.prototype.slice.call(arguments);
+		var s = arg[arg.length - 1];
+		var sum = arg.reduce(function(pv, cv, i) { return pv + cv * (i + seed());}, 0);
+		return Math.floor(random(sum) * s);
+	}
+
+	function random(s) {
+	    var x = Math.sin(s) * 10000;
+	    return x - Math.floor(x);
+	}
+
+	function sleep(milliseconds) {
+	  var start = new Date().getTime();
+	  for (var i = 0; i < 1e7; i++) {
+	    if ((new Date().getTime() - start) > milliseconds){
+	      break;
+	    }
+	  }
+	}
+	var seedIndex = 45367813.923;
+	function seed() {
+		return random(seedIndex) * 854345678.227;
+	}
+	</script>
+</head>
+<body style="background:#000000;">
+	<div id="map">
+		<canvas id="canvas"></canvas>
+		<p><input type="text" id="coordinates" value="" style="width:300px;"></p>
+	</div>
+	<div id="view"></div>
+</body>
+	<script type="text/javascript" src="../js/threedee.js"></script>
+</html>
