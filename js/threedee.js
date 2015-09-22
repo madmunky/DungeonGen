@@ -3,158 +3,282 @@ var imageMax = 100;
 var tdScreenWidth = 800;
 var tdScreenHeight = 600;
 var scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x000000, 1, 18);
-var camera = new THREE.PerspectiveCamera( 35, tdScreenWidth / tdScreenHeight, 1, 18 ); //1.5, 18
+scene.fog = new THREE.Fog(0x000000, 1, tdViewSize);
+var vertexShader = document.getElementById( 'vertexShaderDepth' ).textContent;
+var fragmentShader = document.getElementById( 'fragmentShaderDepth' ).textContent;
+var camera = new THREE.PerspectiveCamera( 35, tdScreenWidth / tdScreenHeight, 1, tdViewSize ); //1.5, 18
 scene.add(camera);
-mirrorCubeCamera = new THREE.CubeCamera( 0.1, 18, 512 );
-scene.add( mirrorCubeCamera );
+
 var renderer = new THREE.WebGLRenderer({ antialias: true});
-renderer.setClearColor(0x000000, 1.0); 
-renderer.shadowMapEnabled = true;
-renderer.shadowMapType = THREE.PCFShadowMap;
+renderer.setPixelRatio( window.devicePixelRatio );
+renderer.setClearColor(0x000000, 1.0);
+renderer.gammaInput = true;
+renderer.gammaOutput = true;
 renderer.setSize( tdScreenWidth, tdScreenHeight );
+renderer.shadowMapEnabled = true;
 renderer.shadowMapType = THREE.PCFSoftShadowMap;
+renderer.shadowMapSoft = true;
+renderer.shadowCameraNear = 1;
+renderer.shadowCameraFar = tdViewSize;
+renderer.shadowCameraFov = 35;
+
+var cubeMapPath = imagePath + 'cubemap/';
+var cubeMapUrls = [
+    cubeMapPath + '1.jpg', cubeMapPath + '2.jpg',
+    cubeMapPath + '3.jpg', cubeMapPath + '4.jpg',
+    cubeMapPath + '5.jpg', cubeMapPath + '6.jpg'
+];
+var reflectionCube = THREE.ImageUtils.loadTextureCube(cubeMapUrls);
+reflectionCube.format = THREE.RGBFormat;
 
 var aryImageLoader = [];
 
 var ambientLight;
 var light;
 var plane, plane2;
-var tdTexture = {
-    'wall': [{
+var tdTexture = {};
+var tdGeometry = [];
+var tdMaterial = {
+    'wall': {
         image: 'wall',
         bump: true,
-        multi: true
-    }],
-    'wallsecret': [{
-        image: 'wall-s',
+        normal: true,
+        specular: true
+    },
+    'wall-x20': {
+        image: 'wall',
+        bump: true,
+        normal: true,
+        specular: true,
+        scale: {x: 2, y: 1}
+    },
+    'wall-secret': {
+        image: 'wall-secret',
         transparent: true,
-        bump: true
-    }],
-    'door': [{
+        bump: true,
+        opacity: 0.5
+    },
+    'wall-wood': {
+        image: 'wall-wood',
+        bump: true,
+        normal: true,
+        specular: true
+    },
+    'wall-wood-x05': {
+        image: 'wall-wood',
+        bump: true,
+        normal: true,
+        specular: true,
+        scale: {x: 0.5, y: 1}
+    },
+    'wall-wood-x025': {
+        image: 'wall-wood',
+        bump: true,
+        normal: true,
+        specular: true,
+        scale: {x: 0.25, y: 1}
+    },
+    'wall-wood-x05-y025': {
+        image: 'wall-wood',
+        bump: true,
+        normal: true,
+        specular: true,
+        scale: {x: 0.5, y: 0.25}
+    },
+    'door': {
         image: 'door',
         bump: true,
-        transparent: true,
-        multi: true
-    }],
-    'floor': [{
+        transparent: true
+    },
+    'floor': {
         image: 'floor',
         bump: true,
-        multi: true,
+        normal: true,
+        specular: true,
         shadow: false
-    }],
-    'pit': [{
+    },
+    'pit': {
         color: '#000000',
         shadow: false
-    }],
-    'wall-deco': [{
+    },
+    'teleport': {
+        image: 'teleport',
+        shadow: false,
+        transparent: true,
+        opacity: 0.5,
+        blend: THREE.AdditiveBlending
+    },
+    'wall-switch': {
+        image: 'wall-switch',
+        transparent: true,
+        shadow: false
+    },
+    'wall-deco': {
         image: 'wall-deco',
         transparent: true,
-        bump: false,
-        shadow: false,
-        multi: true
-    }],
-    'floor-deco': [{
+        bump: true,
+        shadow: false
+    },
+    'floor-deco': {
         image: 'floor-deco',
         transparent: true,
         bump: false,
-        shadow: false,
-        multi: true
-    }],
-    'test': [{
+        shadow: false
+    },
+    'test': {
         color: '#FF00FF',
         bump: false,
         shadow: false
-    }]
+    }
 };
-tdCreateTextures();
+tdCreateMaterials();
 tdCreateLight();
 tdUpdateCamera();
-//tdTexture['floor'][0].texture.repeat.x = viewSize * 1;
-//tdTexture['floor'][0].texture.repeat.y = viewSize * 1;
 
-//START OF STATS
 var stats = new Stats();
 stats.setMode(0); // 0: fps, 1: ms, 2: mb
-// align top-left
 stats.domElement.style.position = 'absolute';
 stats.domElement.style.left = '0px';
 stats.domElement.style.bottom = '0px';
-document.body.appendChild( stats.domElement );
-var update = function() {
-    stats.begin();
-    // monitored code goes here
-    stats.end();
-    requestAnimationFrame(update);
-};
-requestAnimationFrame(update);
-//END OF STATS
+document.body.appendChild(stats.domElement);
 
 function startEngine() {
-    //plane = tdCreatePlane(0, -1);
-    //plane2 = tdCreatePlane(1, 1);
-    document.getElementById('view').appendChild( renderer.domElement );
-    render();
+    document.getElementById('view').appendChild(renderer.domElement);
+    animate();
 }
-
+function animate() {
+    requestAnimationFrame(animate);
+    render();
+    stats.update();
+}
 function render() {
     $('#debug').html('Camera: X ' + camera.position.x.toFixed(2) + ', Y ' + camera.position.y.toFixed(2) + ', Z ' + camera.position.z.toFixed(2) + ', RX ' + camera.rotation.x.toFixed(2) + ', RY ' + camera.rotation.y.toFixed(2) + ', RZ ' + camera.rotation.z.toFixed(2) + '<br>');
     $('#debug').append('Light: X ' + light.position.x.toFixed(2) + ', Y ' + light.position.y.toFixed(2) + ', Z ' + light.position.z.toFixed(2) + ', RX ' + light.rotation.x.toFixed(2) + ', RY ' + light.rotation.y.toFixed(2) + ', RZ ' + light.rotation.z.toFixed(2));
     TWEEN.update();
-    requestAnimationFrame(render);
     renderer.render(scene, camera);
 }
 
-function tdCreateTextures() {
-    for (var ob in tdTexture) {
-        var breaking = false;
-        for(var j = 0; j < tdTexture[ob].length; j++) {
-            var i = j;
-            if(typeof tdTexture[ob][i].image !== "undefined" && tdTexture[ob][i].image !== null) {
-                var img = tdTexture[ob][i].image;
-                do {
-                    if(typeof tdTexture[ob][j].multi !== "undefined" && tdTexture[ob][j].multi) {
-                        if(tdTexture[ob].length <= i) {
-                            tdTexture[ob][i] = {};
-                        } 
-                        tdTexture[ob][i].image = img + '-' + i;
-                    }
-                    if(fileExist(imagePath + tdTexture[ob][i].image + '.jpg')) {
-                        var strName = tdTexture[ob][i].image;
-                        aryImageLoader.push({Name: tdTexture[ob][i].image, Value: false});
-                        tdTexture[ob][i].texture = new THREE.ImageUtils.loadTexture(imagePath + tdTexture[ob][i].image + '.jpg', {}, function(strName) { checkImageLoading(strName)});
-                    } else if(fileExist(imagePath + tdTexture[ob][i].image + '.png')) {
-                        var strName = tdTexture[ob][i].image;
-                        aryImageLoader.push({Name: tdTexture[ob][i].image, Value: false});
-                        tdTexture[ob][i].texture = new THREE.ImageUtils.loadTexture(imagePath + tdTexture[ob][i].image + '.png', {}, function(strName) { checkImageLoading(strName)});
+function tdCreateMaterials() {
+    var img = null;
+    for (var ob in tdMaterial) {
+        var i = 0;
+        tdMaterial[ob].material = [];
+        if(typeof tdMaterial[ob].image !== "undefined" && tdMaterial[ob].image !== '') {
+            if(typeof tdTexture[ob] === "undefined") {
+                tdTexture[ob] = [];
+            }
+            while(true) {
+                if(typeof tdTexture[ob][i] === "undefined") {
+                    img = tdMaterial[ob].image + '-' + i;
+                    if(fileExist(imagePath + img + '.jpg')) {
+                        aryImageLoader.push({Name: img, Value: false});
+                        tdTexture[ob][i] = new THREE.ImageUtils.loadTexture(imagePath + img + '.jpg', {}, function(img) {checkImageLoading(img)});
+                    } else if(fileExist(imagePath + img + '.png')) {
+                        aryImageLoader.push({Name: img, Value: false});
+                        tdTexture[ob][i] = new THREE.ImageUtils.loadTexture(imagePath + img + '.png', {}, function(img) {checkImageLoading(img)});
                     } else {
-                        tdTexture[ob].pop();
-                        breaking = true;
                         break;
                     }
-                    var trans = false;
-                    if(typeof tdTexture[ob][j].transparent !== "undefined" || tdTexture[ob][j].transparent) {
-                        trans = true;
+                    if(typeof tdMaterial[ob].scale !== "undefined") {
+                        tdTexture[ob][i].repeat.set(tdMaterial[ob].scale.x, tdMaterial[ob].scale.y);
                     }
-                    var bump = null;
-                    if(typeof tdTexture[ob][j].bump !== "undefined" || tdTexture[ob][j].bump) {
-                        bump = tdTexture[ob][i].texture;
+                }
+                var trans = false;
+                if(typeof tdMaterial[ob].transparent !== "undefined" && tdMaterial[ob].transparent) {
+                    trans = true;
+                }
+                var shine = 1;
+                var norm = null;
+                if(typeof tdMaterial[ob].normal !== "undefined" && tdMaterial[ob].normal) {
+                    if(typeof tdTexture['norm-' + tdMaterial[ob].image] === 'undefined') {
+                        tdTexture['norm-' + tdMaterial[ob].image] = [];
                     }
-                    var refl = null;
-                    if(typeof tdTexture[ob][j].reflection !== "undefined" || tdTexture[ob][j].reflection) {
-                        refl = mirrorCubeCamera.renderTarget;
-                    }               
-                    tdTexture[ob][i].material = new THREE.MeshPhongMaterial( {map: tdTexture[ob][i].texture, transparent: trans, shininess: 10, side: THREE.SingleSide, bumpMap: bump, bumpScale: 0.05, envMap: refl} );
-                    tdTexture[ob][i].texture.wrapT = THREE.RepeatWrapping;
-                    tdTexture[ob][i].texture.wrapS = THREE.RepeatWrapping;
-                    i++;
-                } while(typeof tdTexture[ob][j].multi !== "undefined" && tdTexture[ob][j].multi);
-            } else if(typeof tdTexture[ob][i].color !== "undefined" && tdTexture[ob][i].color !== null) {
-                tdTexture[ob][i].material = new THREE.MeshLambertMaterial( {color: tdTexture[ob][i].color, side: THREE.SingleSide} );
+                    if(typeof tdTexture['norm-' + tdMaterial[ob].image][i] === 'undefined') {
+                        var img = imagePath + 'norm/' + tdMaterial[ob].image + '-' + i;
+                        if(fileExist(img + '.jpg')) {
+                            tdTexture['norm-' + tdMaterial[ob].image][i] = new THREE.ImageUtils.loadTexture(img + '.jpg', {}, function(img) {checkImageLoading(img)});
+                            norm = tdTexture['norm-' + tdMaterial[ob].image][i];
+                            shine = 20;
+                        } else if(fileExist(img + '.png')) {
+                            tdTexture['norm-' + tdMaterial[ob].image][i] = new THREE.ImageUtils.loadTexture(img + '.png', {}, function(img) {checkImageLoading(img)});
+                            norm = tdTexture['norm-' + tdMaterial[ob].image][i];
+                            shine = 20;
+                        }
+                    }
+                }
+                var bump = null;
+                if(norm === null && typeof tdMaterial[ob].bump !== "undefined" && tdMaterial[ob].bump) {
+                    bump = tdTexture[ob][i];
+                    if(typeof tdTexture['bump-' + tdMaterial[ob].image] === 'undefined') {
+                        tdTexture['bump-' + tdMaterial[ob].image] = [];
+                    }
+                    if(typeof tdTexture['bump-' + tdMaterial[ob].image][i] === 'undefined') {
+                        var img = imagePath + 'bump/' + tdMaterial[ob].image + '-' + i;
+                        if(fileExist(img + '.jpg')) {
+                            tdTexture['bump-' + tdMaterial[ob].image][i] = new THREE.ImageUtils.loadTexture(img + '.jpg', {}, function(img) {checkImageLoading(img)});
+                            bump = tdTexture['bump-' + tdMaterial[ob].image][i];
+                            shine = 20;
+                        } else if(fileExist(img + '.png')) {
+                            tdTexture['bump-' + tdMaterial[ob].image][i] = new THREE.ImageUtils.loadTexture(img + '.png', {}, function(img) {checkImageLoading(img)});
+                            bump = tdTexture['bump-' + tdMaterial[ob].image][i];
+                            shine = 20;
+                        }
+                    }
+                }
+                var spec = null;
+                var specC = 0x000000;
+                if(typeof tdMaterial[ob].specular !== "undefined" && tdMaterial[ob].specular) {
+                    if(typeof tdTexture['spec-' + tdMaterial[ob].image] === 'undefined') {
+                        tdTexture['spec-' + tdMaterial[ob].image] = [];
+                    }
+                    if(typeof tdTexture['spec-' + tdMaterial[ob].image][i] === 'undefined') {
+                        var img = imagePath + 'spec/' + tdMaterial[ob].image + '-' + i;
+                        if(fileExist(img + '.jpg')) {
+                            tdTexture['spec-' + tdMaterial[ob].image][i] = new THREE.ImageUtils.loadTexture(img + '.jpg', {}, function(img) {checkImageLoading(img)});
+                            spec = tdTexture['spec-' + tdMaterial[ob].image][i];
+                            specC = 0x444444;
+                            shine = 20;
+                        } else if(fileExist(img + '.png')) {
+                            tdTexture['spec-' + tdMaterial[ob].image][i] = new THREE.ImageUtils.loadTexture(img + '.png', {}, function(img) {checkImageLoading(img)});
+                            spec = tdTexture['spec-' + tdMaterial[ob].image][i];
+                            specC = 0x444444;
+                            shine = 20;
+                        }
+                    }
+                }
+                var refl = null;
+                if(typeof tdMaterial[ob].reflection !== "undefined" && tdMaterial[ob].reflection) {
+                    refl = reflectionCube;
+                }
+                var opac = 1.0;
+                if(typeof tdMaterial[ob].opacity !== "undefined" && tdMaterial[ob].opacity) {
+                    opac = tdMaterial[ob].opacity;
+                }
+                var blend = THREE.NormalBlending;
+                if(typeof tdMaterial[ob].blending !== "undefined") {
+                    blend = tdMaterial[ob].blending;
+                }
+                var parameters = {
+                    map: tdTexture[ob][i],
+                    bumpMap: bump,
+                    bumpScale: 0.04,
+                    normalMap: norm,
+                    specularMap: spec,
+                    specular: specC,
+                    shininess: shine,
+                    blending: blend,
+                    transparent: trans,
+                    opacity: opac,
+                    side: THREE.FrontSide,
+                    envMap: refl
+                };
+                tdTexture[ob][i].wrapT = tdTexture[ob][i].wrapS = THREE.RepeatWrapping;
+                tdTexture[ob][i].anisotropy = 16;
+                tdMaterial[ob].material[i] = new THREE.MeshPhongMaterial(parameters);
+                i++;
             }
-            if(breaking) {
-                break;
-            }
+        } else if(typeof tdMaterial[ob].color !== "undefined" && tdMaterial[ob].color !== null) {
+            tdMaterial[ob].material[i] = new THREE.MeshLambertMaterial( {color: tdMaterial[ob].color, side: THREE.FrontSide} );
         }
     }
 }
@@ -184,126 +308,118 @@ function checkImageLoading(strImageName){
 function tdCreateLight() {
     ambientLight = new THREE.AmbientLight(0x404850); //404850
     light = new THREE.SpotLight(0xffeedd);
-    light.intensity = 1.5;
-    light.distance = 18;
-    light.angle = Math.PI * 1.5;
+    light.intensity = 3;
+    light.distance = tdViewSize;
+    light.angle = 90 * Math.PI / 180;
     light.shadowDarkness = 0.5;
     light.castShadow = true;
     light.shadowCameraNear = true;
     light.shadowMapWidth = 1024;
     light.shadowMapHeight = 1024;
+
     light.target = camera;
 
     scene.add(ambientLight);
     camera.add(light);
-
-    renderer.shadowMapSoft = false;
-
-    renderer.shadowCameraNear = 0.015;
-    renderer.shadowCameraFar = 18;
-    renderer.shadowCameraFov = 35;
-}
-
-function tdCreatePlane(y, r) {
-    var g = new THREE.PlaneBufferGeometry( viewSize * 1.5, viewSize * 1.5,  viewSize * 1.5, viewSize * 1.5  );
-    pl = new THREE.Mesh( g, tdTexture['floor'][0].material );
-    pl.position.y = y;
-    pl.rotation.x = r * (Math.PI / 2);
-    pl.receiveShadow = true;
-    scene.add( pl );
-    return pl
 }
 
 function tdDrawAll() {
-    //tdClearWorld();
-    for(var x = 0; x < viewSize; x++) {
-        for(var y = 0; y < viewSize; y++) {
-            if(x - viewSize / 2 > -12 && x - viewSize / 2 < 12 && y - viewSize / 2 > -12 && y - viewSize / 2 < 12) {
-                if(typeof map[x][y].mesh !== "undefined" && map[x][y].mesh !== null) {
-                    tdClearObject(map[x][y].mesh);
-                }
-                map[x][y].mesh = tdCreateObject(x + origin.x - viewSize / 2, y + origin.y - viewSize / 2);
+    tdClearWorld();
+    for(var x = -Math.floor(tdViewSize / 2) - 1; x <= Math.floor(tdViewSize / 2) + 1; x++) {
+        for(var y = -Math.floor(tdViewSize / 2) - 1; y <= Math.floor(tdViewSize / 2) + 1; y++) {
+            if(Math.floor(mapSize / 2) + x >= 0 && Math.floor(mapSize / 2) + x / 2 < mapSize && Math.floor(mapSize / 2) + y >= 0 && Math.floor(mapSize / 2) + y < mapSize) {
+                map[Math.floor(mapSize / 2) + x][Math.floor(mapSize / 2) + y].mesh = tdCreateObject(x, y);
             }
         }
     }
 }
 
+function tdDeletePart(x1, y1, x2, y2) {
+    for(var x = x1; x < x2; x++) {
+        for(var y = y1; y < y2; y++) {
+            tdClearObject(map[x][y]);
+        }
+    }
+}
+
 function tdCreateObject(x, y) {
-    var ob = getFloor(x, y).split(',');
+    var xo = x + origin.x;
+    var yo = y + origin.y;
+    var ob = getSquare(xo, yo).split(',');
+    var ms = null;
     var msg = new THREE.Object3D();
     var seed = 0;
-    msg.position.x = x * 1.5;
-    msg.position.y = 0;//(z1 + (z2 / 2)) * 1.0;
-    msg.position.z = y * 1.5;
-    msg.rotation.y = (-(map[x - origin.x + viewSize / 2][y - origin.y + viewSize / 2].rotation + 2) * 90) * Math.PI / 180;
-
-    /*g = new THREE.BoxGeometry( 0.02, 0.02, 0.02, 10 );
-    pivot = new THREE.Mesh(g, tdTexture['test'][0].material);
-    pivot.position.x = 0;
-    pivot.position.y = 0;
-    pivot.position.z = 0;
-    msg.add(pivot);*/
-
+    msg.position.x = (x + origin.x % 150) * 1.5;
+    msg.position.y = 0;
+    msg.position.z = (y + origin.y % 150) * 1.5;
 
     for(var o = 0; o < ob.length; o++) {
         var mat = '', type = '';
         var x1 = 0, y1 = 0, z1 = 0, x2 = 1, y2 = 1, z2 = 0;
         var rnd = 1;
-        //if(ob[o] !== 'floor') {
-            switch(ob[o].replace(/[0-9]/g, '')) {
-                case 'wall': x1 = 0, y1 = 0, z1 = 0, x2 = 1, y2 = 1, z2 = 1; type = 'box4'; mat = 'wall'; rnd = 100; seed = 129.22; break;
-                case 'floor': x1 = 0, y1 = 0, z1 = 0, x2 = 1, y2 = 1, z2 = 1; type = 'floor-ceil'; mat = 'floor'; rnd = 100; break;
-                case 'wallsecret': x1 = 0, y1 = 0, z1 = 0, x2 = 1, y2 = 1, z2 = 1; type = 'box'; mat = 'wallsecret'; seed = 129.22; break;
-                case 'pillar': x1 = 0.3, y1 = 0.3, z1 = 0, x2 = 0.4, y2 = 0.4, z2 = 1; type = 'cylinder'; mat = 'wall'; rnd = 100; seed = 129.22; break;
-                case 'door': x1 = 0, y1 = 0.45, z1 = 0, x2 = 1, y2 = 0.1, z2 = 1; type = 'door'; mat = 'door'; rnd = 100; break;
-                case 'door-open': x1 = 0, y1 = 0.45, z1 = 0, x2 = 1, y2 = 0.1, z2 = 1; type = 'door-open'; mat = 'door'; rnd = 100; break;
-                case 'pit': x1 = 0.2, y1 = 0.2, z1 = 0.001, x2 = 0.6, y2 = 0.6, z2 = 1; type = 'floor'; mat = 'pit'; break;
-                case 'pit-ceil': x1 = 0.2, y1 = 0.2, z1 = -0.001, x2 = 0.6, y2 = 0.6, z2 = 1; type = 'ceil'; mat = 'pit'; break;
-                case 'stairsup': x1 = 0, y1 = 0, z1 = 0, x2 = 1, y2 = 1, z2 = 1; type = 'stairs-up'; mat = 'wall'; rnd = 100; break;
-                case 'stairsdown': x1 = 0, y1 = 0, z1 = -1, x2 = 1, y2 = 1, z2 = 1; type = 'stairs-down'; mat = 'wall'; rnd = 100; break;
-                case 'wall-deco': x1 = 0, y1 = 1.001, z1 = 0, x2 = 1, y2 = 1, z2 = 1; type = 'wall-deco'; mat = 'wall-deco'; seed = 860.97; break;
-                case 'floor-deco': x1 = 0, y1 = 0, z1 = 0.001, x2 = 1, y2 = 1, z2 = 1; type = 'floor'; mat = 'floor-deco'; seed = 860.97; break;
-                default: break;
-            }
-            drawObject(msg, origin.f, x, y, x1, y1, z1, x2, y2, z2, 0, type, mat, rnd, seed);
-        //}
+        switch(ob[o].replace(/[0-9]/g, '')) {
+            case 'wall': x1 = 0, y1 = 0, z1 = 0, x2 = 1, y2 = 1, z2 = 1; type = 'wall'; mat = 'wall'; rnd = 100; seed = 129.22; break;
+            case 'wall-wood': x1 = 0, y1 = 0.99, z1 = 0, x2 = 1, y2 = 0.02, z2 = 1; type = 'wall-wood'; mat = 'wall-wood'; rnd = 100; seed = 444.01; break;
+            case 'door-wood': x1 = 0, y1 = 0.99, z1 = 0, x2 = 1, y2 = 0.02, z2 = 1; type = 'door-wood'; mat = 'wall-wood-x05'; rnd = 100; seed = 444.01; break;
+            case 'door-wood-open': x1 = 0, y1 = 0.99, z1 = 0, x2 = 1, y2 = 0.02, z2 = 1; type = 'door-wood-open'; mat = 'wall-wood-x05'; rnd = 100; seed = 444.01; break;
+            case 'floor': x1 = 0, y1 = 0, z1 = 0, x2 = 1, y2 = 1, z2 = 1; type = 'floor-ceil'; mat = 'floor'; rnd = 100; break;
+            case 'wall-secret': x1 = 0, y1 = 0, z1 = 0, x2 = 1, y2 = 1, z2 = 1; type = 'wall-secret'; mat = 'wall-secret'; rnd = 100; break;
+            case 'pillar': x1 = 0.35, y1 = 0.35, z1 = 0, x2 = 0.3, y2 = 0.3, z2 = 1; type = 'pillar'; mat = 'wall'; rnd = 100; seed = 129.22; break;
+            case 'door': x1 = 0, y1 = 0.45, z1 = 0, x2 = 1, y2 = 0.1, z2 = 1; type = 'door'; mat = 'door'; rnd = 100; break;
+            case 'door-open': x1 = 0, y1 = 0.45, z1 = 0, x2 = 1, y2 = 0.1, z2 = 1; type = 'door-open'; mat = 'door'; rnd = 100; break;
+            case 'teleport': x1 = 0, y1 = 0, z1 = 0, x2 = 1, y2 = 1, z2 = 1; type = 'box4'; mat = 'teleport'; rnd = 100; seed = 51.33; break;
+            case 'pit': x1 = 0.2, y1 = 0.2, z1 = 0.001, x2 = 0.6, y2 = 0.6, z2 = 1; type = 'floor-deco'; mat = 'pit'; break;
+            case 'pit-ceil': x1 = 0.2, y1 = 0.2, z1 = -0.001, x2 = 0.6, y2 = 0.6, z2 = 1; type = 'ceil-deco'; mat = 'pit'; break;
+            case 'stairsup': x1 = 0, y1 = 0, z1 = 0, x2 = 1, y2 = 1, z2 = 1; type = 'stairs-up'; mat = 'wall'; rnd = 100; break;
+            case 'stairsdown': x1 = 0, y1 = 0, z1 = -1, x2 = 1, y2 = 1, z2 = 1; type = 'stairs-down'; mat = 'wall'; rnd = 100; break;
+            case 'wall-switch': x1 = 0, y1 = 1.001, z1 = 0, x2 = 1, y2 = 1, z2 = 1; type = 'wall-deco'; mat = 'wall-switch'; seed = 123.43; break;
+            case 'wall-deco': x1 = 0, y1 = 1.001, z1 = 0, x2 = 1, y2 = 1, z2 = 1; type = 'wall-deco'; mat = 'wall-deco'; seed = 860.97; break;
+            case 'floor-deco': x1 = 0, y1 = 0, z1 = 0.001, x2 = 1, y2 = 1, z2 = 1; type = 'floor-deco'; mat = 'floor-deco'; break;
+            default: break;
+        }
+        var d = parseInt(getSquareDirections(xo, yo).substring(o, o + 1));
+        ms = drawObject(type, msg, origin.f, xo, yo, x1, y1, z1, x2, y2, z2, d, type, mat, rnd, seed);
+        if(ms !== null) {
+            tdRotateInWorld('y', ms, (-(d + 2) * 90) * Math.PI / 180);
+        }
     }
     scene.add(msg);
     return msg;
 }
 
-function drawObject(msg, f, x, y, x1, y1, z1, x2, y2, z2, d, type, mat, rnd, seed) {
+function drawObject(type, msg, f, x, y, x1, y1, z1, x2, y2, z2, d, metatype, mat, rnd, seed) {
+    var m = null;
     var ms = null;
     var g = null;
-    d1 = (d + 1) % 4;
-    d2 = (d + 2) % 4;
-    d3 = (d + 3) % 4;
-    if(mat !== '' && type !== '') {
-        switch(type) {
+    var d1 = (d + 1) % 4;
+    var d2 = (d + 2) % 4;
+    var d3 = (d + 3) % 4;
+    var geotype = type + '-' + x2 + '-' + y2 + '-' + z2;
+    if(mat !== '' && metatype !== '') {
+        switch(metatype) {
             case 'box':
-            g = new THREE.BoxGeometry( x2, z2, y2, 1 );
-            ms = new THREE.Mesh(g, tdTexture[mat][rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), seed, tdTexture[mat].length)].material);
+            m = tdMaterial[mat].material[rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), seed, tdMaterial[mat].material.length)];
+            ms = new THREE.Mesh(tdGeometry[geotype], m);
             ms.scale.set(1.5, 1.0, 1.5);
             ms.rotation.y = (-(d + 2) * 90) * Math.PI / 180;
             ms.position.x = (x1 + (x2 / 2)) * 1.5 - 0.75;
             ms.position.y = (z1 + (z2 / 2)) * 1.0;
             ms.position.z = (y1 + (y2 / 2)) * 1.5 - 0.75;
-            msg.add(ms);
-            break;
-            
-            case 'wall-deco':
-            var g = new THREE.PlaneGeometry(x2, y2, 1, 1);
-            ms = new THREE.Mesh(g, tdTexture[mat][rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), seed, tdTexture[mat].length)].material);
-            ms.scale.set(1.5, 1.0, 1.0);
-            ms.position.set((x1 + (x2 / 2)) * 1.5 - 0.75, (z1 + (z2 / 2)) * 1.0, 0);//(0, 0.5, 0);
-            ms.rotation.y = (-(d + 2) * 90) * Math.PI / 180;
-            ms.translateZ(y1 * 0.75);
+            if(typeof tdGeometry[geotype] === "undefined" || tdGeometry[geotype] === null) {
+                tdGeometry[geotype] = new THREE.BoxGeometry(x2, z2, y2, 1, 1);
+                if(type === 'box4') {
+                    tdGeometry[geotype].faces.splice(4, 4); //remove top and bottom
+                }
+            }
             msg.add(ms);
             break;
 
             case 'floor':
-            var g = new THREE.PlaneGeometry(x2, y2, 1, 1);
-            ms = new THREE.Mesh(g, tdTexture[mat][rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor((x + rnd / 2) / rnd), Math.floor((y + rnd / 2) / rnd), seed, tdTexture[mat].length)].material);
+            m = tdMaterial[mat].material[rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor((x + rnd / 2) / rnd), Math.floor((y + rnd / 2) / rnd), seed, tdMaterial[mat].material.length)]
+            if(typeof tdGeometry[geotype] === "undefined" || tdGeometry[geotype] === null) {
+                tdGeometry[geotype] = new THREE.PlaneBufferGeometry(x2, y2, 1, 1);
+            }
+            ms = new THREE.Mesh(tdGeometry[geotype], m);
             ms.scale.set(1.5, 1.5, 1.0);
             ms.position.set((x1 + (x2 / 2)) * 1.5 - 0.75, (z1 + (z2 / 2)) * 1.0 - 0.5, (y1 + (y2 / 2)) * 1.5 - 0.75);
             ms.rotation.y = (-(d + 2) * 90) * Math.PI / 180;
@@ -312,75 +428,247 @@ function drawObject(msg, f, x, y, x1, y1, z1, x2, y2, z2, d, type, mat, rnd, see
             break;
 
             case 'ceil':
-            var g = new THREE.PlaneGeometry(x2, y2, 1, 1);
-            ms = new THREE.Mesh(g, tdTexture[mat][rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor((x + rnd / 2) / rnd), Math.floor((y + rnd / 2) / rnd), seed, tdTexture[mat].length)].material);
+            m = tdMaterial[mat].material[rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor((x + rnd / 2) / rnd), Math.floor((y + rnd / 2) / rnd), seed, tdMaterial[mat].material.length)];
+            if(typeof tdGeometry[geotype] === "undefined" || tdGeometry[geotype] === null) {
+                tdGeometry[geotype] = new THREE.PlaneBufferGeometry(x2, y2, 1, 1);
+            }
+            ms = new THREE.Mesh(tdGeometry[geotype], m);
             ms.scale.set(1.5, 1.5, 1.0);
             ms.position.set((x1 + (x2 / 2)) * 1.5 - 0.75, (z1 + (z2 / 2)) * 1.0 + 0.5, (y1 + (y2 / 2)) * 1.5 - 0.75);
             ms.rotation.y = (-(d + 2) * 90) * Math.PI / 180;
             ms.rotateX(-3.0 * Math.PI / 2);
             msg.add(ms);
             break;
+            
+            case 'wall-deco':
+            m = tdMaterial[mat].material[rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), seed, tdMaterial[mat].material.length)];
+            if(typeof tdGeometry[geotype] === "undefined" || tdGeometry[geotype] === null) {
+                tdGeometry[geotype] = new THREE.PlaneBufferGeometry(x2, y2, 1, 1);
+            }
+            ms = new THREE.Mesh(tdGeometry[geotype], m);
+            ms.scale.set(1.5, 1.0, 1.0);
+            ms.position.set((x1 + (x2 / 2)) * 1.5 - 0.75, (z1 + (z2 / 2)) * 1.0, 0);//(0, 0.5, 0);
+            ms.rotation.y = (-(d + 2) * 90) * Math.PI / 180;
+            ms.translateZ(y1 * 0.75);
+            msg.add(ms);
+            break;
+
+            case 'cylinder':
+            m = tdMaterial[mat].material[rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), seed, tdMaterial[mat].material.length)];
+            if(typeof tdGeometry[geotype] === "undefined" || tdGeometry[geotype] === null) {
+                tdGeometry[geotype] = new THREE.CylinderGeometry(x2 * 0.5, y2 * 0.5, z2, 16);
+            }
+            ms = new THREE.Mesh(tdGeometry[geotype], m);
+            ms.scale.set(1.5, 1.0, 1.5);
+            ms.position.set((x1 + (x2 / 2)) * 1.5 - 0.75, (z1 + (z2 / 2)) * 1.0, (y1 + (y2 / 2)) * 1.5 - 0.75);
+            ms.rotation.y = rand(f, x, y, 191.09, 360) * Math.PI / 180;
+            msg.add(ms);
+            break;
+
+            case 'cylinder-rx':
+            m = tdMaterial[mat].material[rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), seed, tdMaterial[mat].material.length)];
+            if(typeof tdGeometry[geotype] === "undefined" || tdGeometry[geotype] === null) {
+                tdGeometry[geotype] = new THREE.CylinderGeometry(x2 * 0.5, y2 * 0.5, z2, 16);
+            }
+            ms = new THREE.Mesh(tdGeometry[geotype], m);
+            ms.scale.set(1.5, 1.0, 1.5);
+            ms.position.set((x1 + (x2 / 2)) * 1.5 - 0.75, (z1 + (z2 / 2)) * 1.0, (y1 + (y2 / 2)) * 1.5 - 0.75);
+            ms.rotation.x = 90 * Math.PI / 180;
+            ms.rotation.y = rand(f, x, y, 191.09, 360) * Math.PI / 180;
+            msg.add(ms);
+            break;
+
+            case 'cylinder-rz':
+            m = tdMaterial[mat].material[rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), seed, tdMaterial[mat].material.length)];
+            if(typeof tdGeometry[geotype] === "undefined" || tdGeometry[geotype] === null) {
+                tdGeometry[geotype] = new THREE.CylinderGeometry(x2 * 0.5, y2 * 0.5, z2, 16);
+            }
+            ms = new THREE.Mesh(tdGeometry[geotype], m);
+            ms.scale.set(1.5, 1.0, 1.5);
+            ms.position.set((x1 + (x2 / 2)) * 1.5 - 0.75, (z1 + (z2 / 2)) * 1.0, (y1 + (y2 / 2)) * 1.5 - 0.75);
+            ms.rotation.z = 90 * Math.PI / 180;
+            ms.rotation.x = rand(f, x, y, 191.09, 360) * Math.PI / 180;
+            msg.add(ms);
+            break;
+
+
+
+            case 'wall':
+            var ms = new THREE.Object3D();
+            ms1 = drawObject(type, ms, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'box4', mat, rnd, 129.22);
+            if(rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), 391.87, 4) === 0) {
+                //ms1 = drawObject('wall-rim-1', ms, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'wall-rim-1', mat, rnd, 129.22);
+                ms1 = drawObject(type, ms, f, x, y, x1 - 0.05, y1 - 0.05, z1, 0.11, 0.11, z2, 0, 'cylinder', 'wall-wood-x05', rnd, 444.01);
+                ms1 = drawObject(type, ms, f, x, y, x1 - 0.05, y1 + 0.95, z1, 0.1, 0.1, z2, 0, 'cylinder', 'wall-wood-x05', rnd, 444.01);
+                ms1 = drawObject(type, ms, f, x, y, x1 + 0.95, y1 - 0.05, z1, 0.09, 0.09, z2, 0, 'cylinder', 'wall-wood-x05', rnd, 444.01);
+                ms1 = drawObject(type, ms, f, x, y, x1 + 0.95, y1 + 0.95, z1, 0.08, 0.08, z2, 0, 'cylinder', 'wall-wood-x05', rnd, 444.01);
+            } else if(rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), 391.87, 4) === 1) {
+                //ms1 = drawObject('wall-rim-2', ms, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'wall-rim-2', mat, rnd, 129.22);
+                ms1 = drawObject(type, ms, f, x, y, x1 + 0.45, y1 - 0.05, z1 + 0.25, 0.11, 0.11, z2 * 1.5, 0, 'cylinder-rz', 'wall-wood-x05', rnd, 444.01);
+                ms1 = drawObject(type, ms, f, x, y, x1 + 0.95, y1 + 0.45, z1 + 0.25, 0.1, 0.1, z2 * 1.5, 0, 'cylinder-rx', 'wall-wood-x05', rnd, 444.01);
+                ms1 = drawObject(type, ms, f, x, y, x1 + 0.45, y1 + 0.95, z1 + 0.25, 0.09, 0.09, z2 * 1.5, 0, 'cylinder-rz', 'wall-wood-x05', rnd, 444.01);
+                ms1 = drawObject(type, ms, f, x, y, x1 - 0.05, y1 + 0.45, z1 + 0.25, 0.08, 0.08, z2 * 1.5, 0, 'cylinder-rx', 'wall-wood-x05', rnd, 444.01);
+                ms1 = drawObject(type, ms, f, x, y, x1 + 0.45, y1 - 0.05, z1 - 0.75, 0.08, 0.08, z2 * 1.5, 0, 'cylinder-rz', 'wall-wood-x05', rnd, 444.01);
+                ms1 = drawObject(type, ms, f, x, y, x1 + 0.95, y1 + 0.45, z1 - 0.75, 0.09, 0.09, z2 * 1.5, 0, 'cylinder-rx', 'wall-wood-x05', rnd, 444.01);
+                ms1 = drawObject(type, ms, f, x, y, x1 + 0.45, y1 + 0.95, z1 - 0.75, 0.1, 0.1, z2 * 1.5, 0, 'cylinder-rz', 'wall-wood-x05', rnd, 444.01);
+                ms1 = drawObject(type, ms, f, x, y, x1 - 0.05, y1 + 0.45, z1 - 0.75, 0.11, 0.11, z2 * 1.5, 0, 'cylinder-rx', 'wall-wood-x05', rnd, 444.01);
+            }
+            msg.add(ms);
+            break;
+
+            case 'wall-wood':
+            var ms = new THREE.Object3D();
+            ms1 = drawObject(type, ms, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'box4', mat, rnd, seed);
+            if(rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), 391.87, 4) === 0) {
+                ms1 = drawObject(type, ms, f, x, y, -0.05, 0.95, z1, 0.1, 0.1, z2, 0, 'cylinder', 'wall-wood-x05', rnd, seed);
+                ms1 = drawObject(type, ms, f, x, y, 0.95, 0.95, z1, 0.1, 0.1, z2, 0, 'cylinder', 'wall-wood-x05', rnd, seed);
+            } else if(rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), 391.87, 4) === 1) {
+                ms1 = drawObject(type, ms, f, x, y, 0.45, 0.95, z1 + 0.25, 0.1, 0.1, z2 * 1.5, 0, 'cylinder-rz', 'wall-wood-x05', rnd, seed);
+                ms1 = drawObject(type, ms, f, x, y, 0.45, 0.95, z1 - 0.75, 0.1, 0.1, z2 * 1.5, 0, 'cylinder-rz', 'wall-wood-x05', rnd, seed);
+            }
+            msg.add(ms);
+            break;
+
+            case 'door-wood':
+            var ms = new THREE.Object3D();
+            ms1 = drawObject(type, ms, f, x, y, x1, y1, z1, 0.25, y2, z2, 0, 'box4', 'wall-wood-x025', rnd, seed);
+            ms1 = drawObject(type, ms, f, x, y, x1 + 0.75, y1, z1, 0.25, y2, z2, 0, 'box4', 'wall-wood-x025', rnd, seed);
+            ms1 = drawObject(type, ms, f, x, y, x1 + 0.25, y1, 0.75, 0.5, y2, 0.25, 0, 'box4', 'wall-wood-x05-y025', rnd, seed);
+            ms1 = drawObject(type, ms, f, x, y, x1 + 0.26, y1 + 0.005, z1, 0.48, y2 - 0.01, 0.74, 0, 'box4', 'wall-wood', rnd, seed);
+            if(rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), 391.87, 4) === 0) {
+                ms1 = drawObject(type, ms, f, x, y, -0.05, 0.95, z1, 0.1, 0.1, z2, 0, 'cylinder', 'wall-wood-x05', rnd, seed);
+                ms1 = drawObject(type, ms, f, x, y, 0.95, 0.95, z1, 0.1, 0.1, z2, 0, 'cylinder', 'wall-wood-x05', rnd, seed);
+            } else if(rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), 391.87, 4) === 1) {
+                ms1 = drawObject(type, ms, f, x, y, 0.45, 0.95, z1 + 0.25, 0.1, 0.1, z2 * 1.5, 0, 'cylinder-rz', 'wall-wood-x05', rnd, seed);
+                ms1 = drawObject(type, ms, f, x, y, 0.45, 0.95, z1 - 0.75, 0.1, 0.1, z2 * 1.5, 0, 'cylinder-rz', 'wall-wood-x05', rnd, seed);
+            }
+            msg.add(ms);
+            break;
+
+            case 'door-wood-open':
+            var ms = new THREE.Object3D();
+            ms1 = drawObject(type, ms, f, x, y, x1, y1, z1, 0.25, y2, z2, 0, 'box4', 'wall-wood-x025', rnd, seed);
+            ms1 = drawObject(type, ms, f, x, y, x1 + 0.75, y1, z1, 0.25, y2, z2, 0, 'box4', 'wall-wood-x025', rnd, seed);
+            ms1 = drawObject(type, ms, f, x, y, x1 + 0.25, y1, 0.75, 0.5, y2, 0.25, 0, 'box4', 'wall-wood-x05-y025', rnd, seed);
+            if(rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), 391.87, 4) === 0) {
+                ms1 = drawObject(type, ms, f, x, y, -0.05, 0.95, z1, 0.1, 0.1, z2, 0, 'cylinder', 'wall-wood-x05', rnd, seed);
+                ms1 = drawObject(type, ms, f, x, y, 0.95, 0.95, z1, 0.1, 0.1, z2, 0, 'cylinder', 'wall-wood-x05', rnd, seed);
+            } else if(rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), 391.87, 4) === 1) {
+                ms1 = drawObject(type, ms, f, x, y, 0.45, 0.95, z1 + 0.25, 0.1, 0.1, z2 * 1.5, 0, 'cylinder-rz', 'wall-wood-x05', rnd, seed);
+                ms1 = drawObject(type, ms, f, x, y, 0.45, 0.95, z1 - 0.75, 0.1, 0.1, z2 * 1.5, 0, 'cylinder-rz', 'wall-wood-x05', rnd, seed);
+            }
+            msg.add(ms);
+            break;
+
+            case 'wall-secret':
+            var ms = new THREE.Object3D();
+            ms1 = drawObject('wall', ms, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'wall', 'wall', rnd, 129.22);
+            ms1 = drawObject(type, ms, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'box4', mat, rnd, 929.39);
+            msg.add(ms);
+            break;
 
             case 'stairs':
-            /*var g = new THREE.PlaneBufferGeometry(x2, y2, 1, 1);
-            ms = new THREE.Mesh(g, tdTexture[mat][rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), seed, tdTexture[mat].length)].material);
+            var ms = new THREE.Object3D();
+            /*if(typeof tdGeometry[geotype] === "undefined" || tdGeometry[geotype] === null) {
+                var tdGeometry[geotype] = new THREE.PlaneBufferGeometry(x2, y2, 1, 1);
+            }
+            ms = new THREE.Mesh(tdGeometry[geotype], tdMaterial[mat].material[rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), seed, tdMaterial[mat].material.length)].material);
             ms.scale.set(1.5, 1.8027, 1.0);
             ms.position.set((x1 + (x2 / 2)) * 1.5 - 0.75, (z1 + (z2 / 2)) * 1.0, (y1 + (y2 / 2)) * 1.5 - 0.75);
             ms.rotateX(-56.61 * Math.PI / 180);
             msg.add(ms);*/
             for(var s = 0; s < 10; s++) {
-                ms1 = drawObject(msg, f, x, y, x1 + 0.001, -0.998 + y1 + s * 0.1, z1 - s * 0.1 + 0.001, x2 * 0.998, y2 * 0.998, z2 * 0.998, 0, 'box', 'wall', rnd, 129.22);
+                ms1 = drawObject(type, ms, f, x, y, x1 + 0.01, -0.98 + y1 + s * 0.1, z1 - s * 0.1 + 0.01, x2 * 0.98, y2 * 0.98, z2 * 0.98, 0, 'box', 'wall', rnd, 129.22);
             }
-            break;
-
-            case 'cylinder':
-            g = new THREE.CylinderGeometry(x2 * 0.5, y2 * 0.5, z2, 16);
-            ms = new THREE.Mesh(g, tdTexture[mat][rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), seed, tdTexture[mat].length)].material);
-            ms.scale.set(1.5, 1.0, 1.5);
-            ms.position.set((x1 + (x2 / 2)) * 1.5 - 0.75, (z1 + (z2 / 2)) * 1.0, (y1 + (y2 / 2)) * 1.5 - 0.75);
             msg.add(ms);
             break;
 
             case 'box4':
-            ms1 = drawObject(msg, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'box', mat, rnd, 129.22);
-            ms1.geometry.faces.splice(4, 4); //remove top and bottom
+            var ms = new THREE.Object3D();
+            ms1 = drawObject(type, ms, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'box', mat, rnd, seed);
+            msg.add(ms);
+            break;
+
+            case 'pillar':
+            var ms = new THREE.Object3D();
+            if(rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), 529.52, 3) === 0) {
+                ms1 = drawObject(type, ms, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'cylinder', mat, rnd, 129.22);
+                ms1 = drawObject(type, ms, f, x, y, x1 - 0.1, y1 - 0.1, z1 - 0.8, x2 + 0.2, y2 + 0.2, z2, 0, 'cylinder', 'wall-x20', rnd, 129.22);
+                ms1 = drawObject(type, ms, f, x, y, x1 - 0.1, y1 - 0.1, z1 + 0.8, x2 + 0.2, y2 + 0.2, z2, 0, 'cylinder', 'wall-x20', rnd, 129.22);
+            } else if(rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), 529.52, 3) === 0) {
+                ms1 = drawObject(type, ms, f, x, y, x1 - 0.1, y1 - 0.1, z1, x2 + 0.2, y2 + 0.2, z2, 0, 'cylinder', 'wall-x20', rnd, 129.22);
+            } else {
+                ms1 = drawObject(type, ms, f, x, y, x1 - 0.1, y1 + 0.15, z1, x2 + 0.2, 0, z2, 0, 'cylinder', 'wall-x20', rnd, 129.22);
+                ms1 = drawObject(type, ms, f, x, y, x1 + 0.15, y1 - 0.1, z1, 0, y2 + 0.2, z2, 0, 'cylinder', 'wall-x20', rnd, 129.22);
+            }
+            msg.add(ms);
             break;
 
             case 'door':
-            ms1 = drawObject(msg, f, x, y, x1 + x2 * 0.1, y1 + (y2 * 0.4), z1, x2 * 0.8, y2 * 0.2, z2, 0, 'box', mat, rnd, 356.11);
-            ms1 = drawObject(msg, f, x, y, x1 + 0.9, y1, z1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
-            ms1 = drawObject(msg, f, x, y, x1 - 0.9, y1, z1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
+            var ms = new THREE.Object3D();
+            ms1 = drawObject(type, ms, f, x, y, x1 + x2 * 0.1, y1 + (y2 * 0.4), z1, x2 * 0.8, y2 * 0.2, z2, 0, 'box', mat, rnd, 356.11);
+            ms1 = drawObject('door-rim', ms, f, x, y, x1 + 0.9, y1, z1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
+            ms1 = drawObject('door-rim', ms, f, x, y, x1 - 0.9, y1, z1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
+            msg.add(ms);
             break;
 
             case 'door-open':
-            ms1 = drawObject(msg, f, x, y, x1 + x2 * 0.1, y1 + (y2 * 0.2), z1 + z2 * 0.8, x2 * 0.8, y2 * 0.6, z2, 0, 'box', mat, rnd, 356.11);
-            ms1 = drawObject(msg, f, x, y, x1 + 0.9, y1, z1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
-            ms1 = drawObject(msg, f, x, y, x1 - 0.9, y1, z1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
+            var ms = new THREE.Object3D();
+            ms1 = drawObject(type, ms, f, x, y, x1 + x2 * 0.1, y1 + (y2 * 0.4), z1 + z2 * 0.8, x2 * 0.8, y2 * 0.2, z2, 0, 'box', mat, rnd, 356.11);
+            ms1 = drawObject('door-rim', ms, f, x, y, x1 + 0.9, y1, z1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
+            ms1 = drawObject('door-rim', ms, f, x, y, x1 - 0.9, y1, z1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
+            msg.add(ms);
             break;
 
             case 'floor-ceil':
-            ms1 = drawObject(msg, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'floor', mat, rnd, 51.33);
-            ms1 = drawObject(msg, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'ceil', mat, rnd, 631.11);
+            var ms = new THREE.Object3D();
+            ms1 = drawObject(type, ms, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'floor', mat, rnd, 51.33);
+            //ms1.rotation.z = ((map[x - origin.x + mapSize / 2][y - origin.y + mapSize / 2].rotation + 2) * 90) * Math.PI / 180;
+            ms1 = drawObject(type, ms, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'ceil', mat, rnd, 51.33);
+            //ms1.rotation.z = ((map[x - origin.x + mapSize / 2][y - origin.y + mapSize / 2].rotation + 2) * 90) * Math.PI / 180;
+            msg.add(ms);
+            break;
+
+            case 'floor-deco':
+            var ms = new THREE.Object3D();
+            ms1 = drawObject(type, ms, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'floor', mat, rnd, 707.89);
+            msg.add(ms);
+            break;
+
+            case 'ceil-deco':
+            var ms = new THREE.Object3D();
+            ms1 = drawObject(type, ms, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'ceil', mat, rnd, 110.07);
+            msg.add(ms);
             break;
 
             case 'stairs-up':
-            ms1 = drawObject(msg, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'stairs', mat, rnd, 129.22);
-            ms1 = drawObject(msg, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'floor', 'floor', rnd, 51.33);
-            ms1 = drawObject(msg, f + 1, x, y, x1 - 1, y1, z1 + 1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
-            ms1 = drawObject(msg, f + 1, x, y, x1 + 1, y1, z1 + 1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
-            ms1 = drawObject(msg, f + 1, x, y + 1, x1, y1 + 1, z1 + 1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
+            var ms = new THREE.Object3D();
+            ms1 = drawObject(type, ms, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'stairs', mat, rnd, 129.22);
+            ms1 = drawObject('floor', ms, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'floor', 'floor', rnd, 51.33);
+            ms1 = drawObject('box4', ms, f + 1, x, y, x1 - 1, y1, z1 + 1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
+            ms1 = drawObject('box4', ms, f + 1, x, y, x1 + 1, y1, z1 + 1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
+            ms1 = drawObject('box4', ms, f + 1, x, y + 1, x1, y1 + 1, z1 + 1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
+            msg.add(ms);
             break;
 
             case 'stairs-down':
-            ms1 = drawObject(msg, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'stairs', mat, rnd, 129.22);
-            ms1 = drawObject(msg, f, x, y, x1, y1, z1 + 1, x2, y2, z2, 0, 'ceil', 'floor', rnd, 631.11);
-            ms1 = drawObject(msg, f - 1, x - 1, y, x1 - 1, y1, z1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
-            ms1 = drawObject(msg, f - 1, x + 1, y, x1 + 1, y1, z1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
+            var ms = new THREE.Object3D();
+            ms1 = drawObject(type, ms, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'stairs', mat, rnd, 129.22);
+            ms1 = drawObject('floor', ms, f, x, y, x1, y1, z1 + 1, x2, y2, z2, 0, 'ceil', 'floor', rnd, 51.33);
+            ms1 = drawObject('box4', ms, f - 1, x - 1, y, x1 - 1, y1, z1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
+            ms1 = drawObject('box4', ms, f - 1, x + 1, y, x1 + 1, y1, z1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
+            msg.add(ms);
             break;
         }
         if(ms !== null) {
-            if(typeof tdTexture[mat][0].shadow === "undefined" || tdTexture[mat][0].shadow) {
+            if(typeof tdMaterial[mat].shadow === "undefined" || tdMaterial[mat].shadow) {
                 ms.castShadow = true;
+                if(typeof tdMaterial[mat].transparent !== "undefined" && tdMaterial[mat].transparent) {
+                    //if(m !== null) {
+                        //var uniforms = { texture:  { type: "t", value: m.texture } };
+                        ms.customDepthMaterial = new THREE.ShaderMaterial( { vertexShader: vertexShader, fragmentShader: fragmentShader } );
+                    //}
+                }
             }
             ms.receiveShadow = true;
             return ms;
@@ -389,32 +677,27 @@ function drawObject(msg, f, x, y, x1, y1, z1, x2, y2, z2, d, type, mat, rnd, see
     return null;
 }
 
-function tdMoveCamera(xo, yo) {
-    if(hasFloor(origin.x + xo, origin.y + yo, 'wallsecret') || (!hasFloor(origin.x + xo, origin.y + yo, 'wall') && !hasFloor(origin.x + xo, origin.y + yo, 'wall2') && !hasFloor(origin.x + xo, origin.y + yo, 'pillar') && !hasFloor(origin.x + xo, origin.y + yo, 'door'))) {
+function tdMoveCamera(d) {
+    var xo = dir[d].x;
+    var yo = dir[d].y;
+    if(playerCanMove(d) === 1) {
         keysFrozen = true;
         origin.x = origin.x + xo;
         origin.y = origin.y + yo;
-        //light.position.x = 0;
-        //light.position.z = 0;
-        //light.translateZ(1.45);
-        initField(d);
-        new TWEEN.Tween( {x: origin.x - xo, y: origin.y - yo} )
-            .to( {x: origin.x, y: origin.y}, 400)
+        initField();
+        drawAll();
+        tdDrawAll();
+        new TWEEN.Tween( {x: origin.x % 150 - xo, y: origin.y % 150 - yo} )
+            .to( {x: origin.x % 150, y: origin.y % 150}, 400)
             .easing(TWEEN.Easing.Sinusoidal.InOut)
             .onUpdate(function() {
                 camera.position.x = this.x * 1.5;
                 camera.position.z = this.y * 1.5;
                 camera.translateZ(1.25);
-                
-                //light.position.x = 0;
-                //light.position.y = -0.5;
-                //light.position.z = 0;
-                //light.translateZ(0.3);
             })
             .onComplete(function() {
                 keysFrozen = false;
                 floorAction(origin.x, origin.y);
-                tdDrawAll();
                 tdUpdateCamera();
             })
             .start();
@@ -422,9 +705,6 @@ function tdMoveCamera(xo, yo) {
 }
 
 function tdRotateCamera(d) {
-    //origin.d = d;
-    //tdUpdateCamera();
-
     keysFrozen = true;
     var do1 = -Math.PI / 2 * origin.d;
     var d1 = -Math.PI / 2 * d;
@@ -433,35 +713,25 @@ function tdRotateCamera(d) {
         .to( {d: do1 + d1}, 400)
         .easing(TWEEN.Easing.Sinusoidal.InOut)
         .onUpdate(function() {
-            camera.position.x = origin.x * 1.5;
-            camera.position.z = origin.y * 1.5;
+            camera.position.x = origin.x % 150 * 1.5;
+            camera.position.z = origin.y % 150 * 1.5;
             camera.rotation.y = this.d;
             camera.translateZ(1.25);
-
-            /*light.position.x = 0;
-            light.position.z = 0;
-            light.rotation.y = 0;
-            light.translateZ(0.3);*/
         })
         .onComplete(function() {
             keysFrozen = false;
+            floorAction(origin.x, origin.y, origin.d);
             tdUpdateCamera();
         })
         .start();
 }
 
 function tdClearObject(obj) {
-    if (obj !== ambientLight && obj !== light && obj !== plane && obj !== plane2 && obj !== camera && obj !== mirrorCubeCamera) {
+    if (obj !== ambientLight && obj !== light && obj !== plane && obj !== plane2 && obj !== camera) {
         if (obj.children !== undefined) {
             for (var c = obj.children.length - 1; c >= 0; c--) {
-                if(typeof obj.children[c].geometry !== "undefined") {
-                    obj.children[c].geometry.dispose();
-                }
                 obj.remove(obj.children[c]);
             }
-        }
-        if(typeof obj.geometry !== "undefined") {
-            obj.geometry.dispose();
         }
         scene.remove(obj);
     }
@@ -476,22 +746,40 @@ function tdClearWorld() {
 }
 
 function tdUpdateCamera() {
-    camera.position.x = origin.x * 1.5;
-    camera.position.z = origin.y * 1.5;
+    camera.position.x = origin.x % 150 * 1.5;
+    camera.position.z = origin.y % 150 * 1.5;
     camera.rotation.y = -Math.PI / 2 * origin.d;
     camera.position.y = 0.5;
     camera.translateZ(1.25);
     
     light.position.set(0, 0, 0.4);
 
-    $('body input#coordinates').val('F: ' + origin.f + ', X: ' + origin.x + ', Y: ' + origin.y + ', D: ' + origin.d);
+    var coo = 'F: ' + origin.f + ', X: ' + origin.x + ', Y: ' + origin.y + ', D: ' + origin.d
+    $('body input#coordinates').val(coo);
+    setCookie('player-coordinates', coo, 365);
+}
+
+function tdRotateInWorld(axis, object, radians) {
+    switch(axis) {
+        case 'x': var a = new THREE.Vector3(1,0,0); break;
+        case 'y': var a = new THREE.Vector3(0,1,0); break;
+        case 'z': var a = new THREE.Vector3(0,0,1); break;
+    }
+    var rotWorldMatrix = new THREE.Matrix4();
+    rotWorldMatrix.makeRotationAxis(a.normalize(), radians);
+    rotWorldMatrix.multiply(object.matrix);
+    object.matrix = rotWorldMatrix;
+    object.rotation.setFromRotationMatrix(object.matrix);
 }
 
 function fileExist(urlToFile) {
-    var xhr = new XMLHttpRequest();
-    xhr.open('HEAD', urlToFile, false);
-    xhr.send();
-     
+	try {
+	    var xhr = new XMLHttpRequest();
+	    xhr.open('HEAD', urlToFile, false);
+	    xhr.send();
+	} catch(err) {
+		return false;
+	}     
     if (xhr.status == "404") {
         return false;
     } else {
