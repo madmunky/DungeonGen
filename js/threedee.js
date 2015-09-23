@@ -1,5 +1,5 @@
 var timer = 0;
-var imagePath = '../images/';
+var imagePath = 'images/';
 var imageMax = 100;
 var tdScreenWidth = 800;
 var tdScreenHeight = 600;
