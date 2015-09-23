@@ -19,7 +19,6 @@ $(function() {
 	ctx.canvas.height = viewSize * squareSize;
 	initField();
 	drawAll();
-	tdDrawAll();
 
 	$(document).keydown(function(e) {
 		if(!keysFrozen) {
@@ -308,15 +307,6 @@ function generateFloor(x, y) {
 			setSquare(x, y - 1, 'floor');
 		}
 		setSquare(x, y, 'floor');
-		if(rand(origin.f, x, y, 833.23, 100) === 0) {
-			setSquare(x, y, 'floor,wall-secret', 'wall');
-		}
-		if(rand(origin.f, x, y - 1, 923.01, 100) === 0) {
-			setSquare(x, y - 1, 'floor,wall-secret', 'wall');
-		}
-		if(rand(origin.f, x - 1, y, 13.40, 100) === 0) {
-			setSquare(x - 1, y, 'floor,wall-secret', 'wall');
-		}
 		if(rand(origin.f, x, y, 94.09, 12) === 0) {
 			generateRoom(x, y, rand(origin.f, x, y, 859.35, 3) * 2 + 1, rand(origin.f, x, y, 123.76, 3) * 2 + 1);
 		}
@@ -494,6 +484,9 @@ function generateStairs(x, y) {
 					break;
 					case 1:
 					setSquare(x, y, 'floor,teleport', '', '0' + d1);					
+					break;
+					case 2:
+					setSquare(x + dir[d1].x, y + dir[d1].y, 'floor,wall-secret', 'wall');
 					break;
 					default:
 					setSquare(x + dir[d1].x, y + dir[d1].y, 'floor');					

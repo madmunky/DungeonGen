@@ -1,3 +1,4 @@
+var timer = 0;
 var imagePath = '../images/';
 var imageMax = 100;
 var tdScreenWidth = 800;
@@ -106,7 +107,8 @@ var tdMaterial = {
         shadow: false,
         transparent: true,
         opacity: 0.5,
-        blend: THREE.AdditiveBlending
+        blend: THREE.AdditiveBlending,
+        animate: 'random,10'
     },
     'wall-switch': {
         image: 'wall-switch',
@@ -144,6 +146,7 @@ document.body.appendChild(stats.domElement);
 
 function startEngine() {
     document.getElementById('view').appendChild(renderer.domElement);
+    tdDrawAll();
     animate();
 }
 function animate() {
@@ -152,6 +155,21 @@ function animate() {
     stats.update();
 }
 function render() {
+    for (var ob in tdMaterial) {
+        if(typeof tdMaterial[ob].animate !== 'undefined' && tdMaterial[ob].animate.split(',')[0] === 'random') {
+            var at = parseInt(tdMaterial[ob].animate.split(',')[1]);
+            if(timer % (60 / at) === 0) {
+                var tex = ob;
+                if(typeof tdTexture[tex] !== "undefined") {
+                    for(var i = 0; i < tdTexture[tex].length; i++) {
+                        tdTexture[tex][i].offset.x = Math.random();
+                        tdTexture[tex][i].offset.y = Math.random();
+                    }
+                }
+            }
+        }
+    }
+    timer++;
     $('#debug').html('Camera: X ' + camera.position.x.toFixed(2) + ', Y ' + camera.position.y.toFixed(2) + ', Z ' + camera.position.z.toFixed(2) + ', RX ' + camera.rotation.x.toFixed(2) + ', RY ' + camera.rotation.y.toFixed(2) + ', RZ ' + camera.rotation.z.toFixed(2) + '<br>');
     $('#debug').append('Light: X ' + light.position.x.toFixed(2) + ', Y ' + light.position.y.toFixed(2) + ', Z ' + light.position.z.toFixed(2) + ', RX ' + light.rotation.x.toFixed(2) + ', RY ' + light.rotation.y.toFixed(2) + ', RZ ' + light.rotation.z.toFixed(2));
     TWEEN.update();
@@ -162,25 +180,26 @@ function tdCreateMaterials() {
     var img = null;
     for (var ob in tdMaterial) {
         var i = 0;
+        var tex = ob;
         tdMaterial[ob].material = [];
         if(typeof tdMaterial[ob].image !== "undefined" && tdMaterial[ob].image !== '') {
-            if(typeof tdTexture[ob] === "undefined") {
-                tdTexture[ob] = [];
+            if(typeof tdTexture[tex] === "undefined") {
+                tdTexture[tex] = [];
             }
             while(true) {
-                if(typeof tdTexture[ob][i] === "undefined") {
+                if(typeof tdTexture[tex][i] === "undefined") {
                     img = tdMaterial[ob].image + '-' + i;
                     if(fileExist(imagePath + img + '.jpg')) {
                         aryImageLoader.push({Name: img, Value: false});
-                        tdTexture[ob][i] = new THREE.ImageUtils.loadTexture(imagePath + img + '.jpg', {}, function(img) {checkImageLoading(img)});
+                        tdTexture[tex][i] = new THREE.ImageUtils.loadTexture(imagePath + img + '.jpg', {}, function(img) {checkImageLoading(img)});
                     } else if(fileExist(imagePath + img + '.png')) {
                         aryImageLoader.push({Name: img, Value: false});
-                        tdTexture[ob][i] = new THREE.ImageUtils.loadTexture(imagePath + img + '.png', {}, function(img) {checkImageLoading(img)});
+                        tdTexture[tex][i] = new THREE.ImageUtils.loadTexture(imagePath + img + '.png', {}, function(img) {checkImageLoading(img)});
                     } else {
                         break;
                     }
                     if(typeof tdMaterial[ob].scale !== "undefined") {
-                        tdTexture[ob][i].repeat.set(tdMaterial[ob].scale.x, tdMaterial[ob].scale.y);
+                        tdTexture[tex][i].repeat.set(tdMaterial[ob].scale.x, tdMaterial[ob].scale.y);
                     }
                 }
                 var trans = false;
@@ -208,7 +227,7 @@ function tdCreateMaterials() {
                 }
                 var bump = null;
                 if(norm === null && typeof tdMaterial[ob].bump !== "undefined" && tdMaterial[ob].bump) {
-                    bump = tdTexture[ob][i];
+                    bump = tdTexture[tex][i];
                     if(typeof tdTexture['bump-' + tdMaterial[ob].image] === 'undefined') {
                         tdTexture['bump-' + tdMaterial[ob].image] = [];
                     }
@@ -259,7 +278,7 @@ function tdCreateMaterials() {
                     blend = tdMaterial[ob].blending;
                 }
                 var parameters = {
-                    map: tdTexture[ob][i],
+                    map: tdTexture[tex][i],
                     bumpMap: bump,
                     bumpScale: 0.04,
                     normalMap: norm,
@@ -272,8 +291,8 @@ function tdCreateMaterials() {
                     side: THREE.FrontSide,
                     envMap: refl
                 };
-                tdTexture[ob][i].wrapT = tdTexture[ob][i].wrapS = THREE.RepeatWrapping;
-                tdTexture[ob][i].anisotropy = 16;
+                tdTexture[tex][i].wrapT = tdTexture[tex][i].wrapS = THREE.RepeatWrapping;
+                tdTexture[tex][i].anisotropy = 16;
                 tdMaterial[ob].material[i] = new THREE.MeshPhongMaterial(parameters);
                 i++;
             }
@@ -498,20 +517,20 @@ function drawObject(type, msg, f, x, y, x1, y1, z1, x2, y2, z2, d, metatype, mat
             ms1 = drawObject(type, ms, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'box4', mat, rnd, 129.22);
             if(rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), 391.87, 4) === 0) {
                 //ms1 = drawObject('wall-rim-1', ms, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'wall-rim-1', mat, rnd, 129.22);
-                ms1 = drawObject(type, ms, f, x, y, x1 - 0.05, y1 - 0.05, z1, 0.11, 0.11, z2, 0, 'cylinder', 'wall-wood-x05', rnd, 444.01);
-                ms1 = drawObject(type, ms, f, x, y, x1 - 0.05, y1 + 0.95, z1, 0.1, 0.1, z2, 0, 'cylinder', 'wall-wood-x05', rnd, 444.01);
-                ms1 = drawObject(type, ms, f, x, y, x1 + 0.95, y1 - 0.05, z1, 0.09, 0.09, z2, 0, 'cylinder', 'wall-wood-x05', rnd, 444.01);
-                ms1 = drawObject(type, ms, f, x, y, x1 + 0.95, y1 + 0.95, z1, 0.08, 0.08, z2, 0, 'cylinder', 'wall-wood-x05', rnd, 444.01);
+                ms1 = drawObject(type, ms, f, x, y, x1 - 0.05, y1 - 0.05, z1, 0.101, 0.101, z2, 0, 'cylinder', 'wall-wood-x05', rnd, 444.01);
+                ms1 = drawObject(type, ms, f, x, y, x1 - 0.05, y1 + 0.95, z1, 0.100, 0.100, z2, 0, 'cylinder', 'wall-wood-x05', rnd, 444.01);
+                ms1 = drawObject(type, ms, f, x, y, x1 + 0.95, y1 - 0.05, z1, 0.099, 0.099, z2, 0, 'cylinder', 'wall-wood-x05', rnd, 444.01);
+                ms1 = drawObject(type, ms, f, x, y, x1 + 0.95, y1 + 0.95, z1, 0.098, 0.098, z2, 0, 'cylinder', 'wall-wood-x05', rnd, 444.01);
             } else if(rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), 391.87, 4) === 1) {
                 //ms1 = drawObject('wall-rim-2', ms, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'wall-rim-2', mat, rnd, 129.22);
-                ms1 = drawObject(type, ms, f, x, y, x1 + 0.45, y1 - 0.05, z1 + 0.25, 0.11, 0.11, z2 * 1.5, 0, 'cylinder-rz', 'wall-wood-x05', rnd, 444.01);
+                ms1 = drawObject(type, ms, f, x, y, x1 + 0.45, y1 - 0.05, z1 + 0.25, 0.1, 0.1, z2 * 1.5, 0, 'cylinder-rz', 'wall-wood-x05', rnd, 444.01);
                 ms1 = drawObject(type, ms, f, x, y, x1 + 0.95, y1 + 0.45, z1 + 0.25, 0.1, 0.1, z2 * 1.5, 0, 'cylinder-rx', 'wall-wood-x05', rnd, 444.01);
-                ms1 = drawObject(type, ms, f, x, y, x1 + 0.45, y1 + 0.95, z1 + 0.25, 0.09, 0.09, z2 * 1.5, 0, 'cylinder-rz', 'wall-wood-x05', rnd, 444.01);
-                ms1 = drawObject(type, ms, f, x, y, x1 - 0.05, y1 + 0.45, z1 + 0.25, 0.08, 0.08, z2 * 1.5, 0, 'cylinder-rx', 'wall-wood-x05', rnd, 444.01);
-                ms1 = drawObject(type, ms, f, x, y, x1 + 0.45, y1 - 0.05, z1 - 0.75, 0.08, 0.08, z2 * 1.5, 0, 'cylinder-rz', 'wall-wood-x05', rnd, 444.01);
-                ms1 = drawObject(type, ms, f, x, y, x1 + 0.95, y1 + 0.45, z1 - 0.75, 0.09, 0.09, z2 * 1.5, 0, 'cylinder-rx', 'wall-wood-x05', rnd, 444.01);
-                ms1 = drawObject(type, ms, f, x, y, x1 + 0.45, y1 + 0.95, z1 - 0.75, 0.1, 0.1, z2 * 1.5, 0, 'cylinder-rz', 'wall-wood-x05', rnd, 444.01);
-                ms1 = drawObject(type, ms, f, x, y, x1 - 0.05, y1 + 0.45, z1 - 0.75, 0.11, 0.11, z2 * 1.5, 0, 'cylinder-rx', 'wall-wood-x05', rnd, 444.01);
+                ms1 = drawObject(type, ms, f, x, y, x1 + 0.45, y1 + 0.95, z1 + 0.25, 0.1, 0.1, z2 * 1.5, 0, 'cylinder-rz', 'wall-wood-x05', rnd, 444.01);
+                ms1 = drawObject(type, ms, f, x, y, x1 - 0.05, y1 + 0.45, z1 + 0.25, 0.1, 0.1, z2 * 1.5, 0, 'cylinder-rx', 'wall-wood-x05', rnd, 444.01);
+                ms1 = drawObject(type, ms, f, x, y, x1 + 0.45, y1 - 0.05, z1 - 0.75, 0.099, 0.099, z2 * 1.5, 0, 'cylinder-rz', 'wall-wood-x05', rnd, 444.01);
+                ms1 = drawObject(type, ms, f, x, y, x1 + 0.95, y1 + 0.45, z1 - 0.75, 0.099, 0.099, z2 * 1.5, 0, 'cylinder-rx', 'wall-wood-x05', rnd, 444.01);
+                ms1 = drawObject(type, ms, f, x, y, x1 + 0.45, y1 + 0.95, z1 - 0.75, 0.099, 0.099, z2 * 1.5, 0, 'cylinder-rz', 'wall-wood-x05', rnd, 444.01);
+                ms1 = drawObject(type, ms, f, x, y, x1 - 0.05, y1 + 0.45, z1 - 0.75, 0.099, 0.099, z2 * 1.5, 0, 'cylinder-rx', 'wall-wood-x05', rnd, 444.01);
             }
             msg.add(ms);
             break;
