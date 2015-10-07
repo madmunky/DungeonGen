@@ -181,14 +181,17 @@ function tdAnimate() {
 }
 function tdRender() {
     for (var ob in tdMaterial) {
-        if(typeof tdMaterial[ob].animate !== 'undefined' && tdMaterial[ob].animate.split(',')[0] === 'random') {
-            var at = parseInt(tdMaterial[ob].animate.split(',')[1]);
-            if(timer % (60 / at) === 0) {
-                //var tex = ob;
-                if(typeof tdTexture[ob] !== "undefined") {
-                    for(var i = 0; i < tdTexture[ob].length; i++) {
+        if(typeof tdMaterial[ob].animate !== 'undefined' && typeof tdTexture[ob] !== "undefined") {
+            var at = tdMaterial[ob].animate.split(',');
+            if(timer % Math.floor(60.0 / at[1]) === 0) {
+                for(var i = 0; i < tdTexture[ob].length; i++) {
+                    if(at[0] === 'random') {
                         tdTexture[ob][i].offset.x = Math.random();
                         tdTexture[ob][i].offset.y = Math.random();
+                    } else if(at[0] === 'move-x') {
+                        tdTexture[ob][i].offset.x = parseFloat(at[2]) * timer;
+                    } else if(at[0] === 'move-y') {
+                        tdTexture[ob][i].offset.y = parseFloat(at[2]) * timer;
                     }
                 }
             }
