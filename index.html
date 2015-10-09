@@ -13,7 +13,6 @@
     <script type="text/javascript" src="http://code.jquery.com/jquery-2.1.4.min.js"></script>
     <script type="text/javascript" src="js/three.min.js"></script>
     <script type="text/javascript" src="js/OBJLoader.js"></script>
-    <script type="text/javascript" src="js/ColladaLoader.js"></script>
     <script type="text/javascript" src="js/tween.min.js"></script>
     <script type="text/javascript" src="js/stats.min.js"></script>
     <script type="text/javascript" src="js/gameState.js"></script>
@@ -35,15 +34,16 @@
 			right: 0;
 			margin: auto;
 			border: solid 1px #ffbb44;
+			display: none;
 			-webkit-border-radius: 6px;
 			-moz-border-radius: 6px;
 			border-radius: 6px;
-			z-index: 1;
 			-webkit-box-shadow: 0 0 4px 0 #000;
 			-moz-box-shadow: 0 0 4px 0 #000;
 			box-shadow: 0 0 4px 0 #000;
 		}
-		#loading > .glass {
+		#loading:after {
+			content: "";
 			width: 0;
 			position: absolute;
 			top: 0;
@@ -77,15 +77,35 @@
 			-moz-border-radius:      5px;
 			border-radius:           5px;
 			display: block;
-			/* Permalink - use to edit and share this gradient: http://colorzilla.com/gradient-editor/#0044ff+0,44aaff+96,ffffff+98,44aaff+100 */
+			/* Permalink - use to edit and share this gradient: http://colorzilla.com/gradient-editor/#0044ff+0,44aaff+92,ffffff+98,ffffff+100 */
 			background: #0044ff; /* Old browsers */
-			background: -moz-linear-gradient(left,  #0044ff 0%, #44aaff 96%, #ffffff 98%, #44aaff 100%); /* FF3.6+ */
-			background: -webkit-gradient(linear, left top, right top, color-stop(0%,#0044ff), color-stop(96%,#44aaff), color-stop(98%,#ffffff), color-stop(100%,#44aaff)); /* Chrome,Safari4+ */
-			background: -webkit-linear-gradient(left,  #0044ff 0%,#44aaff 96%,#ffffff 98%,#44aaff 100%); /* Chrome10+,Safari5.1+ */
-			background: -o-linear-gradient(left,  #0044ff 0%,#44aaff 96%,#ffffff 98%,#44aaff 100%); /* Opera 11.10+ */
-			background: -ms-linear-gradient(left,  #0044ff 0%,#44aaff 96%,#ffffff 98%,#44aaff 100%); /* IE10+ */
-			background: linear-gradient(to right,  #0044ff 0%,#44aaff 96%,#ffffff 98%,#44aaff 100%); /* W3C */
-			filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#0044ff', endColorstr='#44aaff',GradientType=1 ); /* IE6-9 */
+			background: -moz-linear-gradient(left,  #0044ff 0%, #44aaff 92%, #ffffff 98%, #ffffff 100%); /* FF3.6+ */
+			background: -webkit-gradient(linear, left top, right top, color-stop(0%,#0044ff), color-stop(92%,#44aaff), color-stop(98%,#ffffff), color-stop(100%,#ffffff)); /* Chrome,Safari4+ */
+			background: -webkit-linear-gradient(left,  #0044ff 0%,#44aaff 92%,#ffffff 98%,#ffffff 100%); /* Chrome10+,Safari5.1+ */
+			background: -o-linear-gradient(left,  #0044ff 0%,#44aaff 92%,#ffffff 98%,#ffffff 100%); /* Opera 11.10+ */
+			background: -ms-linear-gradient(left,  #0044ff 0%,#44aaff 92%,#ffffff 98%,#ffffff 100%); /* IE10+ */
+			background: linear-gradient(to right,  #0044ff 0%,#44aaff 92%,#ffffff 98%,#ffffff 100%); /* W3C */
+			filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#0044ff', endColorstr='#ffffff',GradientType=1 ); /* IE6-9 */
+			opacity: 0.75;
+			-moz-opacity: 0.75;
+			filter: alpha(opacity=75);
+		}
+		#loading > .light {
+			z-index: 3;
+			position: absolute;
+			width: 6px;
+			height: 6px;
+			-webkit-border-radius:   5px;
+			-moz-border-radius:      5px;
+			border-radius:           5px;
+			background: #fff;
+			top: 3px;
+			-moz-box-shadow:    0 0 10px 5px #fff;
+   			-webkit-box-shadow: 0 0 10px 5px #fff;
+   			box-shadow:         0 0 10px 5px #fff;
+			opacity: 0.0;
+			-moz-opacity: 0.0;
+			filter: alpha(opacity=0);
 		}
 		#map, #main {
 			float: left;
@@ -108,7 +128,7 @@
 </head>
 <body style="background:#000000;">
 	<div id="main">
-		<div id="loading"><span class="glass"></span><span class="bar"></span></div>
+		<div id="loading"><span class="bar"></span><span class="light"></span></div>
 		<canvas id="view"></canvas><br>
 		<input type="text" id="coordinates" value="">&nbsp;<input type="button" id="reset-game" value="Reset">&nbsp;<input type="button" id="random" value="Random"><br>
 		<p style="color: #fff;" id="debug"></p>
