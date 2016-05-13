@@ -10,7 +10,7 @@
     <name>Dungeon Generator</name>
 
     <description>
-This is a non-deterministic procedural Dungeon Generator. This means that the dungeon is infinite and not pre-created by man or machine. It is calculated by algorithms and seeded randomisers. 
+This is a deterministic procedural Dungeon Generator. This means that the dungeon is infinite and not pre-created by man or machine. It is calculated by algorithms and seeded randomisers. 
     </description>
 
     <author href="http://www.nieberg.nl" email="jnieberg@gmail.com">

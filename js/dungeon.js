@@ -1134,7 +1134,9 @@ function buttonEvents() {
 			wallAction(origin.x, origin.y, d);
 		}
         for(s in tdSprite) {
-            tdSprite[s].mesh.material.opacity = 0;
+        	if(typeof tdSprite[s].mesh !== "undefined") {
+	            tdSprite[s].mesh.material.opacity = 0;
+	        }
         }
 	}
 }
