@@ -3,8 +3,9 @@
 <!-- config.xml reference: https://build.phonegap.com/docs/config-xml -->
 <widget xmlns     = "http://www.w3.org/ns/widgets"
         xmlns:gap = "http://phonegap.com/ns/1.0"
+        xmlns:android="http://schemas.android.com/apk/res/android"
         id        = "uk.co.dungeongen"
-        version   = "0.1.0">
+        version   = "0.2.0">
 
     <name>Dungeon Generator</name>
 
@@ -43,6 +44,9 @@ This is a non-deterministic procedural Dungeon Generator. This means that the du
     <!-- Plugins -->
 
     <!-- Core plugins -->
+    <gap:config-file platform="android" parent="/manifest">
+         <application android:debuggable="true" />
+    </gap:config-file>
     <!--<gap:plugin name="org.apache.cordova.console" />
     <gap:plugin name="org.apache.cordova.device" />
     <gap:plugin name="org.apache.cordova.device-motion" />
