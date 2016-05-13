@@ -1,4 +1,4 @@
-var debug = true;
+var debug = false;
 var stereo = false;
 var dir = [{x: 0, y: -1}, {x: 1, y: 0}, {x: 0, y: 1}, {x: -1, y: 0}];
 if(comp.device.toLowerCase() === '') {
