@@ -316,13 +316,13 @@ function tdCreateMaterial(ob, i) {
             tdTexture[ob] = [];
         }
         if(typeof tdTexture[ob][i] === "undefined") {
-            var loader = new THREE.ImageLoader( loadingManager );
+            var loader = new THREE.ImageLoader();
             loader.load(imagePath + imagePathQuality + img + '.jpg',
                 function(image) {
                     tdUpdateTexture(image, ob, i);
                 },
-                function(xhr) {},
-                function(xhr) {
+                function() {},
+                function() {
                     loadingCountError++;
                     loader.load(imagePath + imagePathQuality + img + '.png',
                         function(image) {
@@ -346,13 +346,13 @@ function tdCreateMaterial(ob, i) {
                     tdTexture[pre + '-' + ob] = [];
                 }
                 if(typeof tdTexture[pre + '-' + ob][i] === 'undefined') {
-                    var loader = new THREE.ImageLoader( loadingManager );
+                    var loader = new THREE.ImageLoader();
                     loader.load(imagePath + pre + '/' + img + '.jpg',
                         function(image) {
                             tdUpdateNormal(image, ob, i);
                         },
-                        function(xhr) {},
-                        function(xhr) {
+                        function() {},
+                        function() {
                             loadingCountError++;
                         }
                     );
@@ -364,13 +364,13 @@ function tdCreateMaterial(ob, i) {
                     tdTexture[pre + '-' + ob] = [];
                 }
                 if(typeof tdTexture[pre + '-' + ob][i] === 'undefined') {
-                    var loader = new THREE.ImageLoader( loadingManager );
+                    var loader = new THREE.ImageLoader();
                     loader.load(imagePath + pre + '/' + img + '.jpg',
                         function(image) {
                             tdUpdateSpecular(image, ob, i);
                         },
-                        function(xhr) {},
-                        function(xhr) {
+                        function() {},
+                        function() {
                             loadingCountError++;
                         }
                     );
@@ -505,7 +505,7 @@ function tdCreateScene() {
     //reflectionCube = THREE.ImageUtils.loadTextureCube(cubeMapUrls);
     //reflectionCube.format = THREE.RGBFormat;
 
-    camera = new THREE.PerspectiveCamera( 35, canvas.width / canvas.height, 0.75, tdViewSize );
+    camera = new THREE.PerspectiveCamera( 45, canvas.width / canvas.height, 0.75, tdViewSize );
     scene = new THREE.Scene();
     if(comp.device.toLowerCase() === '') {
         controls = new THREE.PointerLockControls(camera);
@@ -536,15 +536,20 @@ function tdCreateScene() {
     }
 
     //SPRITES
+    var spr;
     for(s in tdSprite) {
-        spr = new THREE.TextureLoader().load(imagePath + 'sprite/' + tdSprite[s].image + '.png');
-        var mat = new THREE.SpriteMaterial( { map: spr, color: 0xffffff, depthWrite: false, depthTest: false, opacity: 0.0 } );
-        tdSprite[s].mesh = new THREE.Sprite(mat);
-        if(typeof tdSprite[s].scale !== "undefined") {
-            tdSprite[s].mesh.scale.set(tdSprite[s].scale, tdSprite[s].scale, tdSprite[s].scale);
-        }
-        tdSprite[s].mesh.position.z = -1;
-        camera.add(tdSprite[s].mesh);
+        spr = new THREE.TextureLoader();
+        (function(s) {
+            spr.load(imagePath + 'sprite/' + tdSprite[s].image + '.png', function(tex) {
+                var mat = new THREE.SpriteMaterial( { map: tex, color: 0xffffff, depthWrite: false, depthTest: false, opacity: 0.0 } );
+                tdSprite[s].mesh = new THREE.Sprite(mat);
+                if(typeof tdSprite[s].scale !== "undefined") {
+                    tdSprite[s].mesh.scale.set(tdSprite[s].scale, tdSprite[s].scale, tdSprite[s].scale);
+                }
+                tdSprite[s].mesh.position.z = -1;
+                camera.add(tdSprite[s].mesh);
+            });
+        })(s);
     }
 }
 
@@ -554,13 +559,15 @@ function tdReloadView() {
     canvas.height = window.innerHeight - 70;
     renderer.setViewport(0, 0, canvas.width, canvas.height);
     renderer.setSize( canvas.width, canvas.height );
-    camera.fov = 35;
+    camera.fov = 45;
     camera.near = 0.75;
-    tdBackStep = tdSquareSize.x * 0.75;
-    light.shadow.camera.fov = 35;
+    tdBackStep = tdSquareSize.x * 0.5;
+    light.shadow.camera.fov = 45;
     light.shadow.camera.near = 1.5;
     for(s in tdSprite) {
-        tdSprite[s].mesh.material.opacity = 0;
+        if(typeof tdSprite[s].mesh !== "undefined") {
+            tdSprite[s].mesh.material.opacity = 0;
+        }
     }
     if(stereo) {
         effect.setSize(window.innerWidth, window.innerHeight);
@@ -583,7 +590,7 @@ function tdCreateLight() {
     light.castShadow = true;
     light.shadow.camera.near = 1.2;//tdSquareSize.x;
     light.shadow.camera.far = tdViewSize;
-    light.shadow.camera.fov = 35;
+    light.shadow.camera.fov = 45;
     light.shadow.mapSize.width = 2048;
     light.shadow.mapSize.height = 2048;
     //light.shadow.camera.visible = true;
@@ -1410,54 +1417,57 @@ function tdUpdateCamera(doc) {
     //SPRITES
     if(stereo) {
         for(s in tdSprite) {
-            var vis = 2;
-            if(typeof tdSprite[s].visible !== "undefined") {
-                vis = tdSprite[s].visible(origin.x, origin.y, origin.d, true);
-            }
-            if(vis > 0) {
-                if(tdSprite[s].position === 'relative') {
-                    tdSprite[s].mesh.position.set(0, 0, 0);
-                    tdSprite[s].mesh.rotation.set(0, 0, 0);
-                    tdSprite[s].mesh.rotateY(-dirc.y + (-Math.PI / 2) * (4 + origin.d));
-                    tdSprite[s].mesh.rotateX(-dirc.x);
-                    tdSprite[s].mesh.translateZ(-1);
-                    if(typeof tdSprite[s].offsetY !== "undefined") {
-                        tdSprite[s].mesh.translateY(-tdSprite[s].offsetY);
-                    }
-                    if(typeof tdSprite[s].offsetX !== "undefined") {
-                        tdSprite[s].mesh.translateX(tdSprite[s].offsetX);
-                    }
-                    var op = tdGetSpriteOpacity(s);
-                    if(op > 0.4) {
-                        var sc = tdSprite[s].mesh.scale.x;
-                        if(tdSprite[s].mesh.material.opacity < 1.2) {
-                            tdSprite[s].mesh.material.opacity += 0.05;
+            if(typeof tdSprite[s].mesh !== "undefined") {
+                var vis = 2;
+                if(typeof tdSprite[s].visible !== "undefined") {
+                    vis = tdSprite[s].visible(origin.x, origin.y, origin.d, true);
+                }
+                if(vis > 0) {
+                    if(tdSprite[s].position === 'relative') {
+                        tdSprite[s].mesh.position.set(0, 0, 0);
+                        tdSprite[s].mesh.rotation.set(0, 0, 0);
+                        tdSprite[s].mesh.rotateY(-dirc.y + (-Math.PI / 2) * (4 + origin.d));
+                        tdSprite[s].mesh.rotateX(-dirc.x);
+                        tdSprite[s].mesh.translateZ(-1);
+                        if(typeof tdSprite[s].offsetY !== "undefined") {
+                            tdSprite[s].mesh.translateY(-tdSprite[s].offsetY);
                         }
-                        if(sc > tdSprite[s].scale * 1.2) {
-                            //if(typeof tdSprite[s].scale !== "undefined") {
-                            //    tdSprite[s].mesh.scale.set(tdSprite[s].scale, tdSprite[s].scale, tdSprite[s].scale);
-                            //} else {
-                            //    tdSprite[s].mesh.scale.set(1, 1, 1);
-                            //}
-                            //tdSprite[s].mesh.material.opacity = 0.0;
-                            //buttonEvents();
+                        if(typeof tdSprite[s].offsetX !== "undefined") {
+                            tdSprite[s].mesh.translateX(tdSprite[s].offsetX);
+                        }
+                        var op = tdGetSpriteOpacity(s);
+                        if(op > 0.4) {
+                            var sc = tdSprite[s].mesh.scale.x;
+                            if(tdSprite[s].mesh.material.opacity < 1.2) {
+                                tdSprite[s].mesh.material.opacity += 0.05;
+                            }
+                            if(sc > tdSprite[s].scale * 1.2) {
+                                //if(typeof tdSprite[s].scale !== "undefined") {
+                                //    tdSprite[s].mesh.scale.set(tdSprite[s].scale, tdSprite[s].scale, tdSprite[s].scale);
+                                //} else {
+                                //    tdSprite[s].mesh.scale.set(1, 1, 1);
+                                //}
+                                //tdSprite[s].mesh.material.opacity = 0.0;
+                                //buttonEvents();
+                            } else {
+                                tdSprite[s].mesh.scale.set(sc * 1.01, sc * 1.01, sc * 1.01);
+                            }
                         } else {
-                            tdSprite[s].mesh.scale.set(sc * 1.01, sc * 1.01, sc * 1.01);
+                            if(typeof tdSprite[s].scale !== "undefined") {
+                                tdSprite[s].mesh.scale.set(tdSprite[s].scale, tdSprite[s].scale, tdSprite[s].scale);
+                            } else {
+                                tdSprite[s].mesh.scale.set(1, 1, 1);
+                            }
+                            tdSprite[s].mesh.material.opacity = op;
                         }
                     } else {
-                        if(typeof tdSprite[s].scale !== "undefined") {
-                            tdSprite[s].mesh.scale.set(tdSprite[s].scale, tdSprite[s].scale, tdSprite[s].scale);
-                        } else {
-                            tdSprite[s].mesh.scale.set(1, 1, 1);
-                        }
-                        tdSprite[s].mesh.material.opacity = op;
+                        tdSprite[s].mesh.material.opacity = 1.0;
                     }
                 } else {
-                    tdSprite[s].mesh.material.opacity = 1.0;
+                    tdSprite[s].mesh.material.opacity = 0.0;
                 }
-            } else {
-                tdSprite[s].mesh.material.opacity = 0.0;
             }
+
         }
     }
 
