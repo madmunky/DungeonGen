@@ -1,10 +1,20 @@
-var debug = false;
+var debug = true;
+var stereo = false;
 var dir = [{x: 0, y: -1}, {x: 1, y: 0}, {x: 0, y: 1}, {x: -1, y: 0}];
-var mapSize = 31;
-var viewSize = 14;
-var squareSize = 6;
-var tdViewSize = 13;
-var tdSquareSize = { x: 1.5, y: 1.0 };
+if(comp.device.toLowerCase() === '') {
+	var mapSize = 30; //31
+	var viewSize = 20; //14
+	var squareSize = 8; //16
+	var tdViewSize = 19; //13
+} else {
+	var mapSize = 15;
+	var viewSize = 6;
+	var squareSize = 16;
+	var tdViewSize = 7;
+}
+var tdSquareSize = { x: 1.5, y: 1.5 };
+var tdPlayerHeight = 0.8;
+var tdBackStep;
 var keysFrozen = false;
 var origin = {f: 0, x: 0, y: 0};
 var map, mutation = {};
@@ -36,6 +46,13 @@ $(function() {
 				tdMoveCamera(d3); // a
 		        break;
 
+		    	case 67: // c
+		    	stereo = stereo ? false : true;
+		    	if(stereo) requestFullscreen();
+	            tdReloadView();
+    			tdUpdateCamera();
+		    	break;
+
 		        case 87:
 	        	tdMoveCamera(d); // w
 		        break;
@@ -60,8 +77,7 @@ $(function() {
 		        case 34: origin.f--; reloadAll(); // page down
 		        break;
 
-		        case 32: // space
-		        wallAction(origin.x, origin.y, d);
+		        case 32: wallAction(origin.x, origin.y, d); // space
 		        break;
 
 		        default: return; // exit this handler for other keys
@@ -70,35 +86,10 @@ $(function() {
 	    e.preventDefault();
 	});
 
-	$("#view").on('touchstart', function(e) {
-		if(!keysFrozen) {
-			var x = Math.floor(e.originalEvent.touches[0].pageX / $(this).innerWidth() * 3);
-			var y = Math.floor(e.originalEvent.touches[0].pageY / $(this).innerHeight() * 3);
-			var d = origin.d;
-			var d1 = (origin.d + 1) % 4;
-			var d2 = (origin.d + 2) % 4;
-			var d3 = (origin.d + 3) % 4;
-	        switch(x + y * 3) {
-	        	case 0: tdRotateCamera(-1); break;
-	        	case 1: tdMoveCamera(d); break;
-	        	case 2: tdRotateCamera(1); break;
-	        	case 3: tdMoveCamera(d3); break;
-	        	case 4: tdMoveCamera(d2); break;
-	        	case 5: tdMoveCamera(d1); break;
-	        	default: wallAction(origin.x, origin.y, d); break;
-	        }
-	    }
+	$(document).click(function() {
+		buttonEvents();
+		return false;
     });
-
-	/*$(window).bind('mousewheel', function(e) {
-    	camera.rotation.y = 0;
-	    if(e.originalEvent.wheelDelta > 0) { //up
-	        camera.rotation.x -= 0.1;
-	    } else { //down
-	        camera.rotation.x += 0.1;
-	    }
-	    tdUpdateCamera();
-	});*/
 
 	$('body #coordinates').change(function() {
 		//F: -96109, X: 697844, Y: -835703, D: 2
@@ -115,6 +106,13 @@ $(function() {
 		mutation = {};
 		deleteGame(0);
 		reloadAll();
+	});
+
+	$('body #stereo').click(function() {
+		stereo = stereo ? false : true;
+		if(stereo) requestFullscreen();
+		tdReloadView();
+    	tdUpdateCamera();
 	});
 });
 
@@ -138,7 +136,9 @@ function init() {
 		$('#loading .bar').css('width', w + 'px');
 		$('#loading .light').css('left', (w - 6) + 'px');
 		$('#loading .light').css('opacity', (1.0 * w / width));
-		$('#loading').show();
+		if(!stereo) {
+			$('#loading').show();
+		}
 		if(ldd >= tot) {
 			loadingCountTotal = loaded;
 			$('#loading').fadeOut();
@@ -164,6 +164,7 @@ function reloadAll(act) {
 function startEngine() {
     tdCreateScene();
     tdCreateLight();
+    tdReloadView();
     reloadAll();
     tdAnimate();
 }
@@ -211,7 +212,7 @@ function playerCanMove(d) {
     var yo = dir[d].y;
 	if(hasSquare(origin.x, origin.y, 'wall-wood', d) > -1 || hasSquare(origin.x + xo, origin.y + yo, 'wall-wood', (d + 2) % 4) > -1 || hasSquare(origin.x, origin.y, 'door-wood', d) > -1 || hasSquare(origin.x + xo, origin.y + yo, 'door-wood', (d + 2) % 4) > -1) {
 		return -1;
-	} else if(hasSquare(origin.x + xo, origin.y + yo, 'wall-secret') === -1 && (hasSquare(origin.x + xo, origin.y + yo, 'wall') > -1 || hasSquare(origin.x + xo, origin.y + yo, 'pillar') > -1 || hasSquare(origin.x + xo, origin.y + yo, 'door') > -1)) {
+	} else if(hasSquare(origin.x + xo, origin.y + yo, 'wall-secret') === -1 && (hasSquare(origin.x + xo, origin.y + yo, 'wall') > -1 || hasSquare(origin.x + xo, origin.y + yo, 'pillar') > -1 || hasSquare(origin.x + xo, origin.y + yo, 'obstacle') > -1 || hasSquare(origin.x + xo, origin.y + yo, 'door') > -1)) {
     	return 0;
     }
     return 1;
@@ -290,9 +291,8 @@ function generateField(x1, y1, x2, y2) {
 	for(var y = y1; y < y2; y++) {
 		for(var x = x1; x < x2; x++) {
 			generateRoom(x, y, rand(origin.f, x, y, 859.35, 2) * 2 + 3, rand(origin.f, x, y, 123.76, 2) * 2 + 3);
-			generateRoomWood(x, y, rand(origin.f, x, y, 859.35, 3) * 2 + 1, rand(origin.f, x, y, 123.76, 3) * 2 + 1);
+			generateRoomWood(x, y, rand(origin.f, x, y, 859.35, 4) + 1, rand(origin.f, x, y, 123.76, 4) + 1);
 			//generateDoor(x, y);
-			generatePillar(x, y);
 		}
 	}
 	for(var y = y1; y < y2; y++) {
@@ -302,13 +302,14 @@ function generateField(x1, y1, x2, y2) {
 	}
 	for(var y = y1; y < y2; y++) {
 		for(var x = x1; x < x2; x++) {
-			generateRoomWoodAfter(x, y);
+			generatePillar(x, y);
+			generateStairs(x, y);
+			generateDeco(x, y);
 		}
 	}
 	for(var y = y1; y < y2; y++) {
 		for(var x = x1; x < x2; x++) {
-			generateStairs(x, y);
-			generateDeco(x, y);
+			generateRoomWoodAfter(x, y);
 		}
 	}
 	for(var y = y1; y < y2; y++) {
@@ -341,46 +342,9 @@ function generateFloor(x, y) {
 			setSquare(x, y - 1, 'floor');
 		}
 		setSquare(x, y, 'floor');
-	}
-}
-
-function generatePillar(x, y) {
-	if(Math.abs(x) % 2 === 1 || Math.abs(y) % 2 === 1) {
-		if(rand(origin.f, x, y, 321.11, 10) === 0) {
-			if(hasSquare(x, y, 'door-wood') === -1 && !appendSquare(x, y, 'pillar', 'wall-wood')) {
-				setSquare(x, y, 'floor,pillar');
-			}
-		}
-	}
-}
-
-function generateDoor(x, y, force, locked) {
-	if(typeof force === "undefined") {
-		var force = false;
-	}
-	var lk = '';
-	if(typeof locked !== "undefined" && locked) {
-		lk = ',locked';
-	}
-	if(Math.abs(x) % 2 === 0 && Math.abs(y + 1) % 2 === 0) {
-		if(force || rand(origin.f, x, y, 388.92, 20) === 0) {
-			if(setSquare(x, y, 'floor,door' + lk, null, '00')) {
-				setSquare(x - 1, y, 'wall', null, '0', true, {double: 'wall', protected: true});
-				setSquare(x + 1, y, 'wall', null, '0', true, {double: 'wall', protected: true});
-				//setSquare(x, y - 1, 'floor');
-				//setSquare(x, y + 1, 'floor');
-			}
-		}
-	} 
-	if(Math.abs(x + 1) % 2 === 0 && Math.abs(y) % 2 === 0) {
-		if(force || rand(origin.f, x, y, 129.01, 20) === 0) {
-			if(setSquare(x, y, 'floor,door' + lk, null, '01')) {
-				setSquare(x, y - 1, 'wall', null, '0', true, {double: 'wall', protected: true});
-				setSquare(x, y + 1, 'wall', null, '0', true, {double: 'wall', protected: true});
-				//setSquare(x - 1, y, 'floor');
-				//setSquare(x + 1, y, 'floor');
-			}
-		}
+		//if(rand(origin.f, x + 1, y, 0, 12) === 0) {
+			//appendSquare(x + 1, y, 'light');
+		//}
 	}
 }
 
@@ -398,7 +362,10 @@ function generateStairs(x, y) {
 					setSquare(x + dir[d2].x, y + dir[d2].y, 'wall', null, '0', true, { double: 'none', protected: true });
 					setSquare(x + dir[d3].x, y + dir[d3].y, 'wall', null, '0', true, { double: 'wall', triple: 'wall', protected: true });
 					setSquare(x + dir[d].x, y + dir[d].y, 'floor', null, '0', false);
-					setSquareFeature(x1 + dir[d].x, y1 + dir[d].y, 'protected', 'true');
+					if(getSquareFeature(x + dir[d].x, y + dir[d].y, 'double') !== 'ceil') {
+						setSquareFeature(x + dir[d].x, y + dir[d].y, 'double', 'wall');
+					}
+					setSquareFeature(x + dir[d].x, y + dir[d].y, 'protected', 'true');
 
 					setSquareFeature(x + dir[d1].x + dir[d2].x, y + dir[d1].y + dir[d2].y, 'double', 'wall');
 					setSquareFeature(x + dir[d3].x + dir[d2].x, y + dir[d3].y + dir[d2].y, 'double', 'wall');
@@ -563,8 +530,59 @@ function generateRoomAfter(x, y) {
 			setSquareFeature(x, y, 'double', 'wall');
 		}
 	}
-	if(hasSquare(x, y, 'floor') > -1 && hasSquare(x, y, 'pillar') === -1 && getSquareFeature(x, y, 'double') === 'wall') {
+	if(hasSquare(x, y, 'floor') > -1 && hasSquare(x, y, 'pillar') === -1 && hasSquare(x, y, 'obstacle') === -1 && getSquareFeature(x, y, 'double') === 'wall') {
 		generateDoor(x, y, true);
+	}
+}
+
+function generateDoor(x, y, force, locked) {
+	if(typeof force === "undefined") {
+		var force = false;
+	}
+	var lk = '';
+	if(typeof locked !== "undefined" && locked) {
+		lk = ',locked';
+	}
+	if(Math.abs(x) % 2 === 0 && Math.abs(y + 1) % 2 === 0) {
+		if(force || rand(origin.f, x, y, 388.92, 20) === 0) {
+			if(!getSquareFeature(x, y, 'wood')) {
+				if(setSquare(x, y, 'floor,door' + lk, null, '00')) {
+					setSquare(x - 1, y, 'wall', null, '0', true, {double: 'wall', protected: true});
+					setSquare(x + 1, y, 'wall', null, '0', true, {double: 'wall', protected: true});
+					//setSquare(x, y - 1, 'floor');
+					//setSquare(x, y + 1, 'floor');
+				}
+			}
+		}
+	} 
+	if(Math.abs(x + 1) % 2 === 0 && Math.abs(y) % 2 === 0) {
+		if(force || rand(origin.f, x, y, 129.01, 20) === 0) {
+			if(!getSquareFeature(x, y, 'wood')) {
+				if(setSquare(x, y, 'floor,door' + lk, null, '01')) {
+					setSquare(x, y - 1, 'wall', null, '0', true, {double: 'wall', protected: true});
+					setSquare(x, y + 1, 'wall', null, '0', true, {double: 'wall', protected: true});
+					//setSquare(x - 1, y, 'floor');
+					//setSquare(x + 1, y, 'floor');
+				}
+			}
+		}
+	}
+}
+
+function generatePillar(x, y) {
+	if(Math.abs(x) % 2 === 1 || Math.abs(y) % 2 === 1) {
+		if(rand(origin.f, x, y, 321.11, 20) === 0) {
+			if(hasSquare(x, y, 'door-wood') === -1 && !appendSquare(x, y, 'pillar', 'wall-wood')) {
+				setSquare(x, y, 'floor,pillar');
+			}
+		} else if(rand(origin.f, x, y, 321.11, 10) === 1) {
+			if(hasSquare(x, y, 'door-wood') === -1 && !appendSquare(x, y, 'obstacle', 'wall-wood')) {
+				var d = rand(origin.f, x, y, 612.77, 4);
+				if(hasSquare(x + dir[d].x, y + dir[d].y, 'floor') > -1 && !getSquareFeature(x + dir[d].x, y + dir[d].y, 'wood') && hasSquare(x + dir[d].x, y + dir[d].y, 'pillar') === -1 && hasSquare(x - dir[d].x, y - dir[d].y, 'wall') > -1) {
+					setSquare(x, y, 'floor,obstacle', '', '0' + d);
+				}
+			}
+		}
 	}
 }
 
@@ -573,15 +591,21 @@ function generateRoomWood(x1, y1, xs, ys) {
 		if(rand(origin.f, x1, y1, 109.90, 24) === 1) {
 			x1 = x1 - Math.floor(xs / 2) * 2;
 			y1 = y1 - Math.floor(ys / 2) * 2;
-			for(var y = y1 - Math.floor(ys / 2); y < y1 + Math.ceil(ys / 2); y++) {
-				for(var x = x1 - Math.floor(xs / 2); x < x1 + Math.ceil(xs / 2); x++) {
-					if(hasSquare(x, y, 'door') === -1) {
+			for(var y = y1; y < y1 + ys; y++) {
+				for(var x = x1; x < x1 + xs; x++) {
+					//if(hasSquare(x, y, 'door') === -1) {
+						if(hasSquare(x, y, 'wall') > -1) {
+							setSquare(x, y, 'floor');
+						}
 						if(hasSquare(x, y, 'floor') > -1) {
+							setSquareFeature(x, y, 'wood', true);
+						}
+						/*if(hasSquare(x, y, 'floor') > -1) {
 							appendSquare(x, y, 'floor-wood', null, '', true);
 						} else if(hasSquare(x, y, 'wall') > -1) {
 							setSquare(x, y, 'floor,floor-wood');
-						}
-					}
+						}*/
+					//}
 				}
 			}
 		}
@@ -589,40 +613,31 @@ function generateRoomWood(x1, y1, xs, ys) {
 }
 
 function generateRoomWoodAfter(x, y) {
-	if(hasSquare(x, y, 'floor-wood') > -1) {
-		if(checkLegalWood(x, y - 1)) {
-			if(hasSquare(x - 1, y, 'door-wood') === -1 && hasSquare(x, y - 1, 'door-wood') === -1 && hasSquare(x, y, 'door-wood') === -1 && hasSquare(x, y, 'pillar') === -1) {
-				appendSquare(x, y, 'door-wood', null, '0');
-			} else {
-				appendSquare(x, y, 'wall-wood', null, '0');
-			}
-		}
-		if(checkLegalWood(x + 1, y)) {
-			if(hasSquare(x - 1, y, 'door-wood') === -1 && hasSquare(x, y - 1, 'door-wood') === -1 && hasSquare(x, y, 'door-wood') === -1 && hasSquare(x, y, 'pillar') === -1) {
-				appendSquare(x, y, 'door-wood', null, '1');
-			} else {
-				appendSquare(x, y, 'wall-wood', null, '1');
-			}
-		}
-		if(checkLegalWood(x, y + 1)) {
-			if(hasSquare(x - 1, y, 'door-wood') === -1 && hasSquare(x, y - 1, 'door-wood') === -1 && hasSquare(x, y, 'door-wood') === -1 && hasSquare(x, y, 'pillar') === -1) {
-				appendSquare(x, y, 'door-wood', null, '2');
-			} else {
-				appendSquare(x, y, 'wall-wood', null, '2');
-			}
-		}
-		if(checkLegalWood(x - 1, y)) {
-			if(hasSquare(x - 1, y, 'door-wood') === -1 && hasSquare(x, y - 1, 'door-wood') === -1 && hasSquare(x, y, 'door-wood') === -1 && hasSquare(x, y, 'pillar') === -1) {
-				appendSquare(x, y, 'door-wood', null, '3');
-			} else {
-				appendSquare(x, y, 'wall-wood', null, '3');
+	if(getSquareFeature(x, y, 'wood')) {
+		for(var d = 0; d < 4; d++) {
+			var lw = [checkLegalWood(x, y - 1), checkLegalWood(x + 1, y), checkLegalWood(x, y + 1), checkLegalWood(x - 1, y)];
+			var ls = checkSurroundings(x, y, 'door-wood') && checkSurroundings(x, y, 'pillar') && checkSurroundings(x, y, 'obstacle') && checkSurroundings(x, y, 'pit');
+			if(lw[d] && checkLegalWood(x, y, false)) {
+				if(ls) {
+					appendSquare(x, y, 'door-wood', null, d, true);
+				} else {
+					appendSquare(x, y, 'wall-wood', null, d, true);
+				}
 			}
 		}
 	}
 }
 
-function checkLegalWood(x, y) {
-	if(hasSquare(x, y, 'wall') === -1 && hasSquare(x, y, 'door') === -1 && hasSquare(x, y, 'floor-wood') === -1) {
+function checkSurroundings(x, y, obj) {
+	return hasSquare(x, y, obj) === -1 && hasSquare(x, y - 1, obj) === -1 && hasSquare(x + 1, y, obj) === -1 && hasSquare(x, y + 1, obj) === -1 && hasSquare(x - 1, y, obj) === -1;
+}
+
+function checkLegalWood(x, y, wood) {
+	var isWood = false;
+	if(typeof wood === "undefined" || wood) {
+		isWood = getSquareFeature(x, y, 'wood');
+	}
+	if(hasSquare(x, y, 'wall') === -1 && hasSquare(x, y, 'stairs-up') === -1 && hasSquare(x, y, 'stairs-down') === -1 && hasSquare(x, y, 'door') === -1 && !isWood) {
 		return true;
 	}
 	return false;
@@ -770,7 +785,7 @@ function drawAll() {
 		}
 	}
 	drawRect(origin.x, origin.y, 0.2, 0.2, 0.6, 0.6, 0, '#FFFF00');
-	if(debug) {
+	/*if(debug) {
 	    for(var y = 0; y < mapSize; y++) {
 	    	for(var x = 0; x < mapSize; x++) {
 	    		if(typeof map[x][y].mesh === "undefined" || map[x][y].mesh === null) {
@@ -781,7 +796,7 @@ function drawAll() {
 	    		ctx.fillRect(x * 2, y * 2 + 400, 2, 2);
 	    	}
 	    }
-	}
+	}*/
 }
 
 function drawSquare(x, y) {
@@ -794,10 +809,8 @@ function drawSquare(x, y) {
 		var d = parseInt(getSquareDirections(x, y).substring(o, o + 1));
 		if(object[o] === 'floor') {
 			drawRect(x, y, 0, 0, 1, 1, d, '#FFFFFF');
-		//} else if(object[o] === 'corridor') {
-		//	drawRect(x, y, 0, 0, 0, 1, 1, 0, 0, '#EEEEFF');
 		} else if(object[o] === 'wall') {
-			drawRect(x, y, 0, 0, 1, 1, d, '#999999');
+			drawRect(x, y, 0, 0, 1, 1, d, '#777777');
 		} else if(object[o] === 'wall-wood') {
 			drawRect(x, y, 0, 0, 1, 0.1, d, '#994400');
 		} else if(object[o] === 'door-wood') {
@@ -815,7 +828,7 @@ function drawSquare(x, y) {
 		} else if(object[o] === 'floor-deco') {
 			drawRect(x, y, 0.45, 0.25, 0.1, 0.1, d, '#BBBBBB');
 		} else if(object[o] === 'wall-secret') {
-			drawRect(x, y, 0, 0, 1, 1, d, '#AAAAAA');
+			drawRect(x, y, 0, 0, 1, 1, d, '#777777');
 		} else if(object[o] === 'stairs-up') {
 			drawRect(x, y, 0, 0, 1, 1, d, '#44FF44');
 		} else if(object[o] === 'stairs-down') {
@@ -823,49 +836,55 @@ function drawSquare(x, y) {
 		} else if(object[o] === 'locked') {
 			drawRect(x, y, 0.4, 0.4, 0.2, 0.2, d, '#FF3333');
 		} else if(object[o] === 'door') {
-			drawRect(x, y, 0.1, 0.4, 0.8, 0.2, d, '#999999');
+			drawRect(x, y, 0.1, 0.4, 0.8, 0.2, d, '#777777');
 		} else if(object[o] === 'door-open') {
 			drawRect(x, y, 0.1, 0.4, 0.8, 0.2, d, '#CCCCCC');
 		} else if(object[o] === 'test') {
 			drawRect(x, y, 0.45, 0.45, 0.1, 0.1, d, '#FF88FF');
 		} else if(object[o] === 'pillar') {
-			drawRect(x, y, 0.2, 0.2, 0.6, 0.6, d, '#999999');
+			drawRect(x, y, 0.2, 0.2, 0.6, 0.6, d, '#777777');
+		} else if(object[o] === 'obstacle') {
+			drawRect(x, y, 0.2, 0.2, 0.6, 0.6, d, '#BB7777');
 		} else if(object[o] === 'teleport') {
 			drawRect(x, y, 0, 0, 1, 1, d, '#88CCFF');
 		} else if(object[o] === 'pit') {
 			drawRect(x, y, 0.2, 0.2, 0.6, 0.6, d, '#000000');
 		} else if(object[o] === 'pit-ceil') {
 			drawRect(x, y, 0.2, 0.2, 0.6, 0.6, d, '#EEEEEE');
-		} else if(object[o] === 'floor-wood') {
-			//drawRect(x, y, 0, 0, 1, 1, d, '#FFEEDD');
 		} else if(object[o] === 'light') {
 			drawRect(x, y, 0.45, 0.45, 0.1, 0.1, d, '#FFEE00');
 		}
 	}
-	/*if(getSquareFeature(x, y, 'double') === 'wall') {
-		drawRect(x, y, 0.45, 0.45, 0.1, 0.1, d, '#777777');
-	}
-	if(getSquareFeature(x, y, 'double') === 'ceil') {
-		drawRect(x, y, 0.45, 0.45, 0.1, 0.1, d, '#dddddd');
+	if(getSquareFeature(x, y, 'double') !== 'ceil') {
+		drawRect(x, y, 0, 0, 1, 1, d, '#000000', 0.1);
 	}
 	if(getSquareFeature(x, y, 'protected')) {
-		drawRect(x, y, 0.45, 0.45, 0.1, 0.1, d, '#ff0000');
-	}*/
+		//drawRect(x, y, 0.45, 0.45, 0.1, 0.1, d, '#ff0000');
+	}
+	if(getSquareFeature(x, y, 'wood')) {
+		//drawRect(x, y, 0, 0, 1, 1, d, '#FF8000', 0.1);
+	}
 }
 
 //draw recttancle on square, based on a size of 1
-function drawRect(x, y, x1, y1, x2, y2, d, c) {
-	var xo = (x - origin.x + Math.floor(viewSize / 2));
-	var yo = (y - origin.y + Math.floor(viewSize / 2));
-	var xp, yp, xs, ys;
-	ctx.fillStyle = c;
-	switch(d) {
-		case 0: xp = xo + x1;		yp = yo + y1;		xs = x2;	ys = y2;	break;
-		case 1: xp = xo + 1 - y1;	yp = yo + x1;		xs = -y2;	ys = x2;	break;
-		case 2: xp = xo + 1 - x1;	yp = yo + 1 - y1;	xs = -x2;	ys = -y2;	break;
-		case 3: xp = xo + y1;		yp = yo + 1 - x1;	xs = y2;	ys = -x2;	break;
+function drawRect(x, y, x1, y1, x2, y2, d, c, a) {
+	if(!stereo) {
+		var xo = (x - origin.x + Math.floor(viewSize / 2));
+		var yo = (y - origin.y + Math.floor(viewSize / 2));
+		var xp, yp, xs, ys;
+		ctx.fillStyle = c;
+		ctx.globalAlpha = 1.0;
+		if(typeof a !== "undefined") {
+			ctx.globalAlpha = a;
+		}
+		switch(d) {
+			case 0: xp = xo + x1;		yp = yo + y1;		xs = x2;	ys = y2;	break;
+			case 1: xp = xo + 1 - y1;	yp = yo + x1;		xs = -y2;	ys = x2;	break;
+			case 2: xp = xo + 1 - x1;	yp = yo + 1 - y1;	xs = -x2;	ys = -y2;	break;
+			case 3: xp = xo + y1;		yp = yo + 1 - x1;	xs = y2;	ys = -x2;	break;
+		}
+		ctx.fillRect(xp * squareSize, yp * squareSize, xs * squareSize, ys * squareSize);
 	}
-	ctx.fillRect(xp * squareSize, yp * squareSize, xs * squareSize, ys * squareSize);
 }
 
 function floorAction(x, y, d) {
@@ -912,42 +931,55 @@ function floorAction(x, y, d) {
 	}
 }
 
-function wallAction(x, y, d) {
+//return values:
+//0 = no action
+//1 = close action
+//2 = open action
+//check: only check if there is an action available
+function wallAction(x, y, d, check) {
     var di1 = hasSquare(x, y, 'door-wood', d);
     var di2 = hasSquare(x + dir[d].x, y + dir[d].y, 'door-wood', (d + 2) % 4);
     var di3 = hasSquare(x, y, 'door-wood-open', d);
     var di4 = hasSquare(x + dir[d].x, y + dir[d].y, 'door-wood-open', (d + 2) % 4);
     if(di1 > -1) {
     	//WOODEN DOOR
-    	replaceSquareIndex(x, y, di1, 'door-wood-open');
-    	setMutation(x, y);
-        drawAll();
-		tdDraw(x, y);
-    	return;
+    	if(typeof check === "undefined" || !check) {
+	    	replaceSquareIndex(x, y, di1, 'door-wood-open');
+	    	setMutation(x, y);
+	        drawAll();
+			tdDraw(x, y);
+		}
+    	return 2;
     } else if(di2 > -1) {
     	//WOODEN DOOR
-    	replaceSquareIndex(x + dir[d].x, y + dir[d].y, di2, 'door-wood-open');
-    	setMutation(x + dir[d].x, y + dir[d].y);
-        drawAll();
-		tdDraw(x + dir[d].x, y + dir[d].y);
-    	return;
+    	if(typeof check === "undefined" || !check) {
+	    	replaceSquareIndex(x + dir[d].x, y + dir[d].y, di2, 'door-wood-open');
+	    	setMutation(x + dir[d].x, y + dir[d].y);
+	        drawAll();
+			tdDraw(x + dir[d].x, y + dir[d].y);
+		}
+    	return 2;
     } else if(playerCanMove(d) > -1) {
         //DOOR
         var di1 = hasSquare(x + dir[d].x, y + dir[d].y, 'door');
         var di2 = hasSquare(x + dir[d].x, y + dir[d].y, 'door-open');
         if(hasSquare(x + dir[d].x, y + dir[d].y, 'locked') === -1) {
 	    	if(di1 > -1) {
-	        	replaceSquareIndex(x + dir[d].x, y + dir[d].y, di1, 'door-open');
-	        	setMutation(x + dir[d].x, y + dir[d].y);
-		        drawAll();
-				tdDraw(x + dir[d].x, y + dir[d].y);
-	        	return;
+    			if(typeof check === "undefined" || !check) {
+		        	replaceSquareIndex(x + dir[d].x, y + dir[d].y, di1, 'door-open');
+		        	setMutation(x + dir[d].x, y + dir[d].y);
+			        drawAll();
+					tdDraw(x + dir[d].x, y + dir[d].y);
+				}
+	        	return 2;
 	        } else if(di2 > -1) {
-	        	replaceSquareIndex(x + dir[d].x, y + dir[d].y, di2, 'door');
-	        	setMutation(x + dir[d].x, y + dir[d].y);
-		        drawAll();
-				tdDraw(x + dir[d].x, y + dir[d].y);
-	        	return;
+	        	if(typeof check === "undefined" || !check) {
+		        	replaceSquareIndex(x + dir[d].x, y + dir[d].y, di2, 'door');
+		        	setMutation(x + dir[d].x, y + dir[d].y);
+			        drawAll();
+					tdDraw(x + dir[d].x, y + dir[d].y);
+				}
+	        	return 1;
 	        }
 	    }
 
@@ -955,65 +987,72 @@ function wallAction(x, y, d) {
         var di1 = hasSquare(x + dir[d].x, y + dir[d].y, 'wall-switch', (d + 2) % 4);
         var di2 = hasSquare(x + dir[d].x, y + dir[d].y, 'wall-switch-off', (d + 2) % 4);
         if(di1 > -1 || di2 > -1) {
-        	var feat = getSquareFeatures(x + dir[d].x, y + dir[d].y);
-        	if(!replaceSquareIndex(x + dir[d].x, y + dir[d].y, di1, 'wall-switch-off')) {
-				replaceSquareIndex(x + dir[d].x, y + dir[d].y, di2, 'wall-switch');
-        	}
-        	if(typeof feat.target !== "undefined") {
-	        	var xt = feat.target.x;
-	        	var yt = feat.target.y;
-	        	var dt = feat.target.d;
-	        	if(typeof dt === "undefined") {
-	        		dt = '0';
+        	if(typeof check === "undefined" || !check) {
+	        	var feat = getSquareFeatures(x + dir[d].x, y + dir[d].y);
+	        	if(!replaceSquareIndex(x + dir[d].x, y + dir[d].y, di1, 'wall-switch-off')) {
+					replaceSquareIndex(x + dir[d].x, y + dir[d].y, di2, 'wall-switch');
 	        	}
-        		var ss = clone(getSquare(xt, yt)); //source
-	        	if(typeof feat.target.obj !== "undefined") {
-	        		if(feat.target.obj !== '') {
-		        		setSquare(xt, yt, feat.target.obj, '', dt);
+	        	if(typeof feat.target !== "undefined") {
+		        	var xt = feat.target.x;
+		        	var yt = feat.target.y;
+		        	var dt = feat.target.d;
+		        	if(typeof dt === "undefined") {
+		        		dt = '0';
 		        	}
-		        } else {
-			        var di1 = hasSquare(xt, yt, 'door');
-			        var di2 = hasSquare(xt, yt, 'door-open');
-		        	if(di1 > 0) {
-		        		replaceSquareIndex(xt, yt, di1, 'door-open');
-		        	} else if(di2 > 0) {
-		        		replaceSquareIndex(xt, yt, di2, 'door');
-		        	} else {
-						setSquare(xt, yt, 'floor', '', dt, true);
-					}
+	        		var ss = clone(getSquare(xt, yt)); //source
+		        	if(typeof feat.target.obj !== "undefined") {
+		        		if(feat.target.obj !== '') {
+			        		setSquare(xt, yt, feat.target.obj, '', dt);
+			        	}
+			        } else {
+				        var di1 = hasSquare(xt, yt, 'door');
+				        var di2 = hasSquare(xt, yt, 'door-open');
+			        	if(di1 > 0) {
+			        		replaceSquareIndex(xt, yt, di1, 'door-open');
+			        	} else if(di2 > 0) {
+			        		replaceSquareIndex(xt, yt, di2, 'door');
+			        	} else {
+							setSquare(xt, yt, 'floor', '', dt, true);
+						}
+			        }
+			        if(typeof feat.target.mode !== "undefined") {
+			        	if(feat.target.mode === 'toggle') {
+			        		feat.target.obj = ss.obj;
+			        		feat.target.d = ss.rotation;
+			        	} else if(feat.target.mode === 'once') {
+			        		feat.target.obj = '';
+			        	}
+			        }
+		        	setMutation(x + dir[d].x, y + dir[d].y);
+		        	setMutation(xt, yt);
+			        drawAll();
+					tdDraw(x + dir[d].x, y + dir[d].y);
+					tdDraw(xt, yt);
 		        }
-		        if(typeof feat.target.mode !== "undefined") {
-		        	if(feat.target.mode === 'toggle') {
-		        		feat.target.obj = ss.obj;
-		        		feat.target.d = ss.rotation;
-		        	} else if(feat.target.mode === 'once') {
-		        		feat.target.obj = '';
-		        	}
-		        }
-	        	setMutation(x + dir[d].x, y + dir[d].y);
-	        	setMutation(xt, yt);
-		        drawAll();
-				tdDraw(x + dir[d].x, y + dir[d].y);
-				tdDraw(xt, yt);
-	        }
-        	return;
+		    }
+        	return 2;
         }
     }
     if(di3 > -1) {
     	//WOODEN DOOR
-    	replaceSquareIndex(x, y, di3, 'door-wood');
-    	setMutation(x, y);
-        drawAll();
-		tdDraw(x, y);
-    	return;
+    	if(typeof check === "undefined" || !check) {
+	    	replaceSquareIndex(x, y, di3, 'door-wood');
+	    	setMutation(x, y);
+	        drawAll();
+			tdDraw(x, y);
+		}
+    	return 1;
     } else if(di4 > -1) {
    		//WOODEN DOOR
-    	replaceSquareIndex(x + dir[d].x, y + dir[d].y, di4, 'door-wood');
-    	setMutation(x + dir[d].x, y + dir[d].y);
-        drawAll();
-		tdDraw(x + dir[d].x, y + dir[d].y);
-    	return;
+   		if(typeof check === "undefined" || !check) {
+	    	replaceSquareIndex(x + dir[d].x, y + dir[d].y, di4, 'door-wood');
+	    	setMutation(x + dir[d].x, y + dir[d].y);
+	        drawAll();
+			tdDraw(x + dir[d].x, y + dir[d].y);
+		}
+    	return 1;
 	}
+	return 0;
 }
 
 function deleteRow(arr, row) {
@@ -1070,15 +1109,47 @@ function getCookie(cname) {
     return "";
 }
 
+function requestFullscreen() {
+	var con = document.getElementById('view');
+	if (con.requestFullscreen) {
+		con.requestFullscreen();
+	} else if (con.msRequestFullscreen) {
+		con.msRequestFullscreen();
+	} else if (con.mozRequestFullScreen) {
+		con.mozRequestFullScreen();
+	} else if (con.webkitRequestFullscreen) {
+		con.webkitRequestFullscreen();
+	}
+}
+
+function buttonEvents() {
+	if(controlsEnabled && !keysFrozen) {
+		var d = origin.d;
+		var d2 = (origin.d + 2) % 4;
+		if(tdGetSpriteOpacity('icon-forward') > 0.4) {
+			tdMoveCamera(d);
+		} else if(tdGetSpriteOpacity('icon-backward') > 0.4) {
+			tdMoveCamera(d2);
+		} else if(tdGetSpriteOpacity('icon-use') > 0.4) {
+			wallAction(origin.x, origin.y, d);
+		}
+        for(s in tdSprite) {
+            tdSprite[s].mesh.material.opacity = 0;
+        }
+	}
+}
+
 function getMutation(x, y) {
-	var k = getMutationKey(origin.f, x, y);
-    if(k.f in mutation) {
-    	if(k.x in mutation[k.f]) {
-    		if(k.y in mutation[k.f][k.x]) {
-       			return mutation[k.f][k.x][k.y];
-       		}
-       	}
-    }
+	if(typeof mutation !== "undefined") {
+		var k = getMutationKey(origin.f, x, y);
+	    if(k.f in mutation) {
+	    	if(k.x in mutation[k.f]) {
+	    		if(k.y in mutation[k.f][k.x]) {
+	       			return mutation[k.f][k.x][k.y];
+	       		}
+	       	}
+	    }
+	}
     return null;
 }
 function setMutation(x1, y1) {
@@ -1097,7 +1168,14 @@ function setMutation(x1, y1) {
 function deleteMutation(x, y) {
 	var m = getMutation(x, y);
 	if(m !== null) {
-	    delete m;
+		var k = getMutationKey(origin.f, x, y);
+	    delete mutation[k.f][k.x][k.y];
+	    if($.isEmptyObject(mutation[k.f][k.x])) {
+	    	delete mutation[k.f][k.x];
+	    	if($.isEmptyObject(mutation[k.f])) {
+	    		delete mutation[k.f];
+	    	}
+	    }
 	}
 }
 function getMutationKey(f, x, y) {

@@ -1,6 +1,9 @@
+var controls, effect, controlsEnabled;
+var raycaster;
 var timer = 0;
 var imagePath = 'images/';
-var tdScreenWidth = 800;
+var imagePathQuality = 'high/'
+var tdScreenWidth = 800; 
 var tdScreenHeight = 600;
 var vertexShader = document.getElementById( 'vertexShaderDepth' ).textContent;
 var fragmentShader = document.getElementById( 'fragmentShaderDepth' ).textContent;
@@ -15,8 +18,35 @@ var cubeMapUrls = [
 var aryImageLoader = [];
 
 var scene, renderer, camera;
+var yawObject, pitchObject, rollObject;
 var light, ambientLight;
 var plane, plane2;
+var tdSprite = {
+    'icon-forward': {
+        image: 'icon-forward',
+        position: 'relative',
+        scale: 0.2
+    },
+    'icon-backward': {
+        image: 'icon-backward',
+        offsetY: 0.2,
+        position: 'relative',
+        scale: 0.2
+    },
+    'icon-use': {
+        image: 'icon-use',
+        offsetY: -0.2,
+        position: 'relative',
+        visible: wallAction,
+        scale: 0.2
+    },
+    'crosshair': {
+        image: 'crosshair',
+        position: 'fixed',
+        scale: 0.1
+    }
+};
+var tdObject = [];
 var tdTexture = {};
 var tdGeometry = [];
 var tdMaterial = {
@@ -53,6 +83,13 @@ var tdMaterial = {
         normal: true,
         specular: true,
         scale: {x: 1, y: 0.1},
+        len: 29
+    },
+    'wall-x05-y02': {
+        image: 'wall',
+        normal: true,
+        specular: true,
+        scale: {x: 0.5, y: 0.2},
         len: 29
     },
     'wall-x20-y02': {
@@ -178,20 +215,30 @@ var tdMaterial = {
         len: 9
     },
     'obstacle': {
-        image: 'floor-deco',
-        transparent: true,
-        normal: false,
-        shadow: false,
-        len: 1
+        image: 'obstacle',
+        normal: true,
+        len: 2
     },
     'test': {
         color: '#FF00FF',
         len: 1
     }
 };
+var tdMeshFix = {
+    'obstacle': [{ //statue roman
+        x1: 0.44,    y1: 0.55,   z1: 0.0,
+        x2: 0.25,    y2: 0.25,    z2: 0.9
+    }, { //rock
+        x1: 0.2,    y1: 0.2,   z1: 0.0,
+        x2: 0.6,    y2: 0.6,    z2: 0.6
+    }]
+}
 
 function tdAnimate() {
     requestAnimationFrame(tdAnimate);
+    if(comp.device.toLowerCase() !== '') {
+        controls.update();
+    }
     tdRender();
 }
 function tdRender() {
@@ -215,7 +262,14 @@ function tdRender() {
     timer++;
     printDebug();
     TWEEN.update();
-    renderer.render(scene, camera);
+    if (controlsEnabled && !keysFrozen) {
+        tdUpdateCamera(true);
+    }
+    if(stereo) {
+        effect.render(scene, camera);
+    } else {
+        renderer.render(scene, camera);
+    }
 }
 
 function tdCreateMaterial(ob, i) {
@@ -263,14 +317,14 @@ function tdCreateMaterial(ob, i) {
         }
         if(typeof tdTexture[ob][i] === "undefined") {
             var loader = new THREE.ImageLoader( loadingManager );
-            loader.load(imagePath + img + '.jpg',
+            loader.load(imagePath + imagePathQuality + img + '.jpg',
                 function(image) {
                     tdUpdateTexture(image, ob, i);
                 },
                 function(xhr) {},
                 function(xhr) {
                     loadingCountError++;
-                    loader.load(imagePath + img + '.png',
+                    loader.load(imagePath + imagePathQuality + img + '.png',
                         function(image) {
                             tdUpdateTexture(image, ob, i);
                         },
@@ -285,40 +339,42 @@ function tdCreateMaterial(ob, i) {
         } else if(tdTexture[ob][i] === null) {
             return null;
         }
-        if(typeof tdMaterial[ob].normal !== "undefined" && tdMaterial[ob].normal) {
-            var pre = 'norm';
-            if(typeof tdTexture[pre + '-' + ob] === "undefined") {
-                tdTexture[pre + '-' + ob] = [];
+        if(comp.device.toLowerCase() === '') {
+            if(typeof tdMaterial[ob].normal !== "undefined" && tdMaterial[ob].normal) {
+                var pre = 'norm';
+                if(typeof tdTexture[pre + '-' + ob] === "undefined") {
+                    tdTexture[pre + '-' + ob] = [];
+                }
+                if(typeof tdTexture[pre + '-' + ob][i] === 'undefined') {
+                    var loader = new THREE.ImageLoader( loadingManager );
+                    loader.load(imagePath + pre + '/' + img + '.jpg',
+                        function(image) {
+                            tdUpdateNormal(image, ob, i);
+                        },
+                        function(xhr) {},
+                        function(xhr) {
+                            loadingCountError++;
+                        }
+                    );
+                }
             }
-            if(typeof tdTexture[pre + '-' + ob][i] === 'undefined') {
-                var loader = new THREE.ImageLoader( loadingManager );
-                loader.load(imagePath + pre + '/' + img + '.jpg',
-                    function(image) {
-                        tdUpdateNormal(image, ob, i);
-                    },
-                    function(xhr) {},
-                    function(xhr) {
-                        loadingCountError++;
-                    }
-                );
-            }
-        }
-        if(typeof tdMaterial[ob].specular !== "undefined" && tdMaterial[ob].specular) {
-            var pre = 'spec';
-            if(typeof tdTexture[pre + '-' + ob] === "undefined") {
-                tdTexture[pre + '-' + ob] = [];
-            }
-            if(typeof tdTexture[pre + '-' + ob][i] === 'undefined') {
-                var loader = new THREE.ImageLoader( loadingManager );
-                loader.load(imagePath + pre + '/' + img + '.jpg',
-                    function(image) {
-                        tdUpdateSpecular(image, ob, i);
-                    },
-                    function(xhr) {},
-                    function(xhr) {
-                        loadingCountError++;
-                    }
-                );
+            if(typeof tdMaterial[ob].specular !== "undefined" && tdMaterial[ob].specular) {
+                var pre = 'spec';
+                if(typeof tdTexture[pre + '-' + ob] === "undefined") {
+                    tdTexture[pre + '-' + ob] = [];
+                }
+                if(typeof tdTexture[pre + '-' + ob][i] === 'undefined') {
+                    var loader = new THREE.ImageLoader( loadingManager );
+                    loader.load(imagePath + pre + '/' + img + '.jpg',
+                        function(image) {
+                            tdUpdateSpecular(image, ob, i);
+                        },
+                        function(xhr) {},
+                        function(xhr) {
+                            loadingCountError++;
+                        }
+                    );
+                }
             }
         }
 
@@ -333,7 +389,6 @@ function tdCreateMaterial(ob, i) {
 
 function tdUpdateTexture(image, ob, i) {
     if(typeof tdMaterial[ob].material[i] !== "undefined") {
-
         (function(image, ob, i) {
             setTimeout(function() {
                 tdTexture[ob][i] = new THREE.Texture();
@@ -346,65 +401,73 @@ function tdUpdateTexture(image, ob, i) {
                     tdTexture[ob][i].offset.y = tdMaterial[ob].translate.y;
                 }
                 tdTexture[ob][i].wrapT = tdTexture[ob][i].wrapS = THREE.RepeatWrapping;
-                tdTexture[ob][i].anisotropy = 16;
+                if(comp.device.toLowerCase() === '') {
+                    tdTexture[ob][i].anisotropy = 16;
+                }
                 tdTexture[ob][i].needsUpdate = true;
                 tdMaterial[ob].material[i].map = tdTexture[ob][i];
                 tdMaterial[ob].material[i].needsUpdate = true;
-                if(tdMaterial[ob].material[i].map.image.src.endsWith('.png') && typeof tdMaterial['shade-' + ob] !== "undefined" && typeof tdMaterial['shade-' + ob].material !== "undefined" && typeof tdMaterial['shade-' + ob].material[i] !== "undefined") {
-                    var uniforms = { texture: { type: "t", value: tdTexture[ob][i] } };
-                    tdMaterial['shade-' + ob].material[i].uniforms = uniforms;
-                    tdMaterial['shade-' + ob].material[i].needsUpdate = true;
-                }
+                /*if(comp.device.toLowerCase() === '') {
+                    if(tdMaterial[ob].material[i].map.image.src.endsWith('.png') && typeof tdMaterial['shade-' + ob] !== "undefined" && typeof tdMaterial['shade-' + ob].material !== "undefined" && typeof tdMaterial['shade-' + ob].material[i] !== "undefined") {
+                        var uniforms = { texture: { type: "t", value: tdTexture[ob][i] } };
+                        tdMaterial['shade-' + ob].material[i].uniforms = uniforms;
+                        tdMaterial['shade-' + ob].material[i].needsUpdate = true;
+                    }
+                }*/
             }, 1);
         })(image, ob, i);
     }
 }
 
 function tdUpdateNormal(image, ob, i) {
-    if(typeof tdMaterial[ob].material[i] !== "undefined") {
-        (function(image, ob, i) {
-            setTimeout(function() {
-                tdTexture['norm-' + ob][i] = new THREE.Texture();
-                tdTexture['norm-' + ob][i].image = image;
-                if(typeof tdMaterial[ob].scale !== "undefined") {
-                    tdTexture['norm-' + ob][i].repeat.set(tdMaterial[ob].scale.x, tdMaterial[ob].scale.y);
-                }
-                if(typeof tdMaterial[ob].translate !== "undefined") {
-                    tdTexture['norm-' + ob][i].offset.x = tdMaterial[ob].translate.x;
-                    tdTexture['norm-' + ob][i].offset.y = tdMaterial[ob].translate.y;
-                }
-                tdTexture['norm-' + ob][i].wrapT = tdTexture['norm-' + ob][i].wrapS = THREE.RepeatWrapping;
-                tdTexture['norm-' + ob][i].anisotropy = 16;
-                tdTexture['norm-' + ob][i].needsUpdate = true;
-                tdMaterial[ob].material[i].normalMap = tdTexture['norm-' + ob][i];
-                tdMaterial[ob].material[i].needsUpdate = true;
-            }, 1);
-        })(image, ob, i);
+    if(comp.device.toLowerCase() === '') {
+        if(typeof tdMaterial[ob].material[i] !== "undefined") {
+            (function(image, ob, i) {
+                setTimeout(function() {
+                    tdTexture['norm-' + ob][i] = new THREE.Texture();
+                    tdTexture['norm-' + ob][i].image = image;
+                    if(typeof tdMaterial[ob].scale !== "undefined") {
+                        tdTexture['norm-' + ob][i].repeat.set(tdMaterial[ob].scale.x, tdMaterial[ob].scale.y);
+                    }
+                    if(typeof tdMaterial[ob].translate !== "undefined") {
+                        tdTexture['norm-' + ob][i].offset.x = tdMaterial[ob].translate.x;
+                        tdTexture['norm-' + ob][i].offset.y = tdMaterial[ob].translate.y;
+                    }
+                    tdTexture['norm-' + ob][i].wrapT = tdTexture['norm-' + ob][i].wrapS = THREE.RepeatWrapping;
+                    tdTexture['norm-' + ob][i].anisotropy = 16;
+                    tdTexture['norm-' + ob][i].needsUpdate = true;
+                    tdMaterial[ob].material[i].normalMap = tdTexture['norm-' + ob][i];
+                    tdMaterial[ob].material[i].needsUpdate = true;
+                }, 1);
+            })(image, ob, i);
+        }
     }
 }
 
 function tdUpdateSpecular(image, ob, i) {
-    if(typeof tdMaterial[ob].material[i] !== "undefined") {
-        (function(image, ob, i) {
-            setTimeout(function() {
-                tdTexture['spec-' + ob][i] = new THREE.Texture();
-                tdTexture['spec-' + ob][i].image = image;
-                if(typeof tdMaterial[ob].scale !== "undefined") {
-                    tdTexture['spec-' + ob][i].repeat.set(tdMaterial[ob].scale.x, tdMaterial[ob].scale.y);
-                }
-                if(typeof tdMaterial[ob].translate !== "undefined") {
-                    tdTexture['spec-' + ob][i].offset.x = tdMaterial[ob].translate.x;
-                    tdTexture['spec-' + ob][i].offset.y = tdMaterial[ob].translate.y;
-                }
-                tdTexture['spec-' + ob][i].wrapT = tdTexture['spec-' + ob][i].wrapS = THREE.RepeatWrapping;
-                tdTexture['spec-' + ob][i].anisotropy = 16;
-                tdTexture['spec-' + ob][i].needsUpdate = true;
-                tdMaterial[ob].material[i].specularMap = tdTexture['spec-' + ob][i];
-                tdMaterial[ob].material[i].specular = new THREE.Color(0x302820);
-                tdMaterial[ob].material[i].shininess = 20;
-                tdMaterial[ob].material[i].needsUpdate = true;
-            }, 1);
-        })(image, ob, i);
+    if(comp.device.toLowerCase() === '') {
+        if(typeof tdMaterial[ob].material[i] !== "undefined") {
+            (function(image, ob, i) {
+                setTimeout(function() {
+                    tdTexture['spec-' + ob][i] = new THREE.Texture();
+                    tdTexture['spec-' + ob][i].image = image;
+                    if(typeof tdMaterial[ob].scale !== "undefined") {
+                        tdTexture['spec-' + ob][i].repeat.set(tdMaterial[ob].scale.x, tdMaterial[ob].scale.y);
+                    }
+                    if(typeof tdMaterial[ob].translate !== "undefined") {
+                        tdTexture['spec-' + ob][i].offset.x = tdMaterial[ob].translate.x;
+                        tdTexture['spec-' + ob][i].offset.y = tdMaterial[ob].translate.y;
+                    }
+                    tdTexture['spec-' + ob][i].wrapT = tdTexture['spec-' + ob][i].wrapS = THREE.RepeatWrapping;
+                    tdTexture['spec-' + ob][i].anisotropy = 16;
+                    tdTexture['spec-' + ob][i].needsUpdate = true;
+                    tdMaterial[ob].material[i].specularMap = tdTexture['spec-' + ob][i];
+                    tdMaterial[ob].material[i].specular = new THREE.Color(0x302820);
+                    tdMaterial[ob].material[i].shininess = 20;
+                    tdMaterial[ob].material[i].needsUpdate = true;
+                }, 1);
+            })(image, ob, i);
+        }
     }
 }
 
@@ -418,56 +481,112 @@ function tdCreateMaterials() {
 }
 
 function tdCreateScene() {
+    if(comp.device.toLowerCase() === '') {
+        checkPointerLock();
+    }
+
     var canvas = document.getElementById('view');
-    canvas.width  = window.innerWidth - viewSize * squareSize - 10;
-    canvas.height = window.innerHeight - 70;
+    //canvas.width  = window.innerWidth - viewSize * squareSize - 10;
+    //canvas.height = window.innerHeight - 70;
     
     renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true});
-    //renderer.shadowMapDebug = true;
+    //renderer.shadow.mapSize.debug = true;
     renderer.setPixelRatio( window.devicePixelRatio );
-    renderer.setViewport(0, 0, canvas.width, canvas.height);
+    //renderer.setViewport(0, 0, canvas.width, canvas.height);
     renderer.setClearColor(0x000000, 1.0);
     renderer.gammaInput = true;
     renderer.gammaOutput = true;
-    renderer.shadowMapEnabled = true;
-    renderer.shadowMapType = THREE.PCFSoftShadowMap;
-    //renderer.shadowMapCascade = true;
-    renderer.shadowMapSoft = true;
-    /*renderer.shadowCameraNear = 0.5;
-    renderer.shadowCameraFar = tdViewSize;
-    renderer.shadowCameraFov = 179;*/
-    renderer.setSize( canvas.width, canvas.height );
+    if(comp.device.toLowerCase() === '') {
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    }
+    //renderer.setSize( canvas.width, canvas.height );
+
     //reflectionCube = THREE.ImageUtils.loadTextureCube(cubeMapUrls);
     //reflectionCube.format = THREE.RGBFormat;
 
     camera = new THREE.PerspectiveCamera( 35, canvas.width / canvas.height, 0.75, tdViewSize );
     scene = new THREE.Scene();
+    if(comp.device.toLowerCase() === '') {
+        controls = new THREE.PointerLockControls(camera);
+        //scene.add(controls.getObject());
+    } else {
+        controls = new THREE.DeviceOrientationControls(camera);
+        controlsEnabled = true;
+    }
     scene.fog = new THREE.Fog(0x000000, 1, tdViewSize);
     scene.add(camera);
-    window.addEventListener('resize', function () {
-        canvas.width  = window.innerWidth - viewSize * squareSize - 10;
-        canvas.height = window.innerHeight - 70;
-        renderer.setViewport(0, 0, canvas.width, canvas.height);
-        renderer.setSize( canvas.width, canvas.height );
-        camera.aspect = canvas.width / canvas.height;
-        camera.updateProjectionMatrix();
+    //if(stereo) {
+        effect = new THREE.StereoEffect(renderer);
+        //effect.setSize(window.innerWidth, window.innerHeight);
+    //}
+    raycaster = new THREE.Raycaster( new THREE.Vector3(), new THREE.Vector3( 0, - 1, 0 ), 0, 10 );
+
+    window.addEventListener('resize', function() {
+        tdReloadView();
     });
+    if(comp.device.toLowerCase() !== '') {
+        imagePathQuality = 'low/'
+
+        window.addEventListener('deviceorientation', function(e) {
+            tdUpdateCamera(true);
+            //origin.d = Math.round(camera.rotation.y / (-Math.PI / 2) + 4) % 4;
+            //camera.rotation.y = -Math.PI / 2 * origin.d;
+        });
+    }
+
+    //SPRITES
+    for(s in tdSprite) {
+        spr = new THREE.TextureLoader().load(imagePath + 'sprite/' + tdSprite[s].image + '.png');
+        var mat = new THREE.SpriteMaterial( { map: spr, color: 0xffffff, depthWrite: false, depthTest: false, opacity: 0.0 } );
+        tdSprite[s].mesh = new THREE.Sprite(mat);
+        if(typeof tdSprite[s].scale !== "undefined") {
+            tdSprite[s].mesh.scale.set(tdSprite[s].scale, tdSprite[s].scale, tdSprite[s].scale);
+        }
+        tdSprite[s].mesh.position.z = -1;
+        camera.add(tdSprite[s].mesh);
+    }
+}
+
+function tdReloadView() {
+    var canvas = document.getElementById('view');
+    canvas.width  = window.innerWidth - viewSize * squareSize - 10;
+    canvas.height = window.innerHeight - 70;
+    renderer.setViewport(0, 0, canvas.width, canvas.height);
+    renderer.setSize( canvas.width, canvas.height );
+    camera.fov = 35;
+    camera.near = 0.75;
+    tdBackStep = tdSquareSize.x * 0.75;
+    light.shadow.camera.fov = 35;
+    light.shadow.camera.near = 1.5;
+    for(s in tdSprite) {
+        tdSprite[s].mesh.material.opacity = 0;
+    }
+    if(stereo) {
+        effect.setSize(window.innerWidth, window.innerHeight);
+        camera.fov = 90;
+        camera.near = 0.01;
+        tdBackStep = 0;
+        light.shadow.camera.fov = 90;
+        light.shadow.camera.near = 0.01;
+    }
+    camera.aspect = canvas.width / canvas.height;
+    camera.updateProjectionMatrix();
 }
 
 function tdCreateLight() {
-    ambientLight = new THREE.AmbientLight(0x302820);
+    ambientLight = new THREE.AmbientLight(0x302820, 0.5);
     light = new THREE.SpotLight(0xf0e0d0);
     light.intensity = 3;
     light.distance = tdViewSize;
     //light.angle = 90 * Math.PI / 180;
-    light.shadowDarkness = 0.90;
     light.castShadow = true;
-    light.shadowCameraNear = tdSquareSize.x;
-    light.shadowCameraFar = tdViewSize;
-    light.shadowCameraFov = 65;
-    light.shadowMapWidth = 1024;
-    light.shadowMapHeight = 1024;
-    //light.shadowCameraVisible = true;
+    light.shadow.camera.near = 1.2;//tdSquareSize.x;
+    light.shadow.camera.far = tdViewSize;
+    light.shadow.camera.fov = 35;
+    light.shadow.mapSize.width = 2048;
+    light.shadow.mapSize.height = 2048;
+    //light.shadow.camera.visible = true;
 
     light.target = camera;
 
@@ -508,6 +627,9 @@ function tdCreateObject(x, y) {
     //var yo = y + origin.y;
     var ob = getSquareObj(x, y).split(',');
     var ms = null;
+    var ms1 = null;
+    var ms2 = null;
+    var ms3 = null;
     var msg = new THREE.Object3D();
     msg.name = 'F' + origin.f + ',X' + x + ',Y' + y;
     msg.position.x = (x - origin.xt) * tdSquareSize.x;
@@ -527,11 +649,12 @@ function tdCreateObject(x, y) {
             case 'floor': x1 = 0, y1 = 0, z1 = 0, x2 = 1, y2 = 1, z2 = 1; type = 'floor-ceil'; mat = 'floor'; rnd = 100; break;
             case 'wall-secret': x1 = 0, y1 = 0, z1 = 0, x2 = 1, y2 = 1, z2 = 1; type = 'wall-secret'; mat = 'wall-secret'; rnd = 100; break;
             case 'pillar': x1 = 0.35, y1 = 0.35, z1 = 0, x2 = 0.3, y2 = 0.3, z2 = 1; type = 'pillar'; mat = 'wall'; rnd = 100; seed = 129.22; break;
+            case 'obstacle': x1 = 0, y1 = 0, z1 = 0, x2 = 1, y2 = 1, z2 = 1; type = 'obstacle'; mat = 'obstacle'; rnd = 100; seed = 129.22; break;
             case 'door': x1 = 0, y1 = 0.45, z1 = 0, x2 = 1, y2 = 0.1, z2 = 1; type = 'door'; mat = 'door'; rnd = 100; break;
             case 'door-open': x1 = 0, y1 = 0.45, z1 = 0, x2 = 1, y2 = 0.1, z2 = 1; type = 'door-open'; mat = 'door'; rnd = 100; break;
             case 'teleport': x1 = 0, y1 = 0, z1 = 0, x2 = 1, y2 = 1, z2 = 1; type = 'box4'; mat = 'teleport'; rnd = 100; seed = 515.78; break;
-            case 'pit': x1 = 0, y1 = 0, z1 = 0, x2 = 1, y2 = 1, z2 = 1; type = 'pit'; mat = 'floor'; rnd = 100; seed = 51.33; break;
-            case 'pit-ceil': x1 = 0, y1 = 0, z1 = 2, x2 = 1, y2 = 1, z2 = 1; type = 'pit'; mat = 'floor'; rnd = 100; seed = 51.33; break;
+            case 'pit': x1 = 0, y1 = 0, z1 = -1, x2 = 1, y2 = 1, z2 = 1; type = 'pit'; mat = 'floor'; rnd = 100; seed = 51.33; break;
+            case 'pit-ceil': x1 = 0, y1 = 0, z1 = 1, x2 = 1, y2 = 1, z2 = 1; type = 'pit'; mat = 'floor'; rnd = 100; seed = 51.33; break;
             case 'stairs-up': x1 = 0, y1 = 0, z1 = 0, x2 = 1, y2 = 1, z2 = 1; type = 'stairs-up'; mat = 'wall'; rnd = 100; break;
             case 'stairs-down': x1 = 0, y1 = 0, z1 = -1, x2 = 1, y2 = 1, z2 = 1; type = 'stairs-down'; mat = 'wall'; rnd = 100; break;
             case 'wall-switch': x1 = 0, y1 = 1.001, z1 = 0, x2 = 1, y2 = 1, z2 = 1; type = 'wall-deco'; mat = 'wall-switch'; seed = 123.43; break;
@@ -547,13 +670,24 @@ function tdCreateObject(x, y) {
         if(ms !== null) {
             tdRotateInWorld('y', ms, (-(d + 2) * 90) * Math.PI / 180);
         }
-        if(getSquareFeature(x, y, 'double') === 'ceil') {
-            ms1 = tdDrawObject('floor-ceil-double', msg, origin.f, x, y, 0, 0, 1, 1, 1, 1, 0, 'floor-ceil', 'floor', 100);
-        } else if(getSquareFeature(x, y, 'double') === 'wall') {
-            ms1 = tdDrawObject('wall', msg, origin.f, x, y, 0, 0, 1, 1, 1, 1, 0, 'wall', 'wall', 100, 129.22);
-        }
-        if(getSquareFeature(x, y, 'triple') === 'wall') {
-            ms1 = tdDrawObject('wall', msg, origin.f, x, y, 0, 0, 2, 1, 1, 1, 0, 'wall', 'wall', 100, 129.22);
+        if(o === 0) {
+            if(getSquareFeature(x, y, 'double') === 'ceil') {
+                ms1 = tdDrawObject('floor-ceil-double', msg, origin.f, x, y, 0, 0, 1, 1, 1, 1, 0, 'floor-ceil', 'floor', 100);
+                if(ms1 !== null) {
+                    tdRotateInWorld('y', ms1, (-(d + 2) * 90) * Math.PI / 180);
+                }
+            } else if(getSquareFeature(x, y, 'double') === 'wall') {
+                ms2 = tdDrawObject('wall', msg, origin.f, x, y, 0, 0, 1, 1, 1, 1, 0, 'wall', 'wall', 100, 129.22);
+                if(ms2 !== null) {
+                    tdRotateInWorld('y', ms2, (-(d + 2) * 90) * Math.PI / 180);
+                }
+            }
+            if(getSquareFeature(x, y, 'triple') === 'wall') {
+                ms3 = tdDrawObject('wall', msg, origin.f, x, y, 0, 0, 2, 1, 1, 1, 0, 'wall', 'wall', 100, 129.22);
+                if(ms3 !== null) {
+                    tdRotateInWorld('y', ms3, (-(d + 2) * 90) * Math.PI / 180);
+                }
+            }
         }
     }
     scene.add(msg);
@@ -724,9 +858,9 @@ function tdDrawObject(type, msg, f, x, y, x1, y1, z1, x2, y2, z2, d, metatype, m
                 ms1 = tdDrawObject(type, ms, f, x, y, x1 + 0.45, y1 + 0.95, z1 - 0.75, 0.1, 0.1, z2 * 1.5, 0, 'cylinder-rz', 'wall-wood-x05', rnd, 444.01);
                 ms1 = tdDrawObject(type, ms, f, x, y, x1 - 0.05, y1 + 0.45, z1 - 0.75, 0.1, 0.1, z2 * 1.5, 0, 'cylinder-rx', 'wall-wood-x05', rnd, 444.01);
             } else if(rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), 391.87, 10) === 2) {
-                //if(rand(f, x, y, 197.76, 2) === 0) {
+                if(rand(f, x, y, 197.76, 2) === 0) {
                     ms1 = tdDrawObject('box4', ms, f, x, y, x1 - 0.05, y1 - 0.05, z1, 0.101, 0.101, z2, 0, 'box4', 'wall-wood-x01', rnd, 444.01);
-                //}
+                }
             } else if(rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), 391.87, 10) === 4) {
                 ms1 = tdDrawObject(type, ms, f, x, y, x1 - 0.05, y1 - 0.05, z1, 0.101, 0.101, z2, 0, 'cylinder', 'wall-x05', rnd, 129.22);
                 ms1 = tdDrawObject(type, ms, f, x, y, x1 - 0.05, y1 + 0.95, z1, 0.100, 0.100, z2, 0, 'cylinder', 'wall-x05', rnd, 129.22);
@@ -792,35 +926,64 @@ function tdDrawObject(type, msg, f, x, y, x1, y1, z1, x2, y2, z2, d, metatype, m
             break;
 
             case 'pit':
-            var z3 = 0;
-            if(z1 === 2 && getSquareFeature(x, y, 'double') === 'ceil') {
-                z3 = 1;
-            }
             var i = rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor((x + rnd / 2) / rnd), Math.floor((y + rnd / 2) / rnd), seed, tdMaterial[mat].len);
             ms = new THREE.Object3D();
-            tdLoadObjectOBJ(type, ms, x1, y1, z1 + z3, x2, y2, z2, 0, type, mat, i);
+            var z3 = 0;
+            if(z1 === 1) {
+                if(getSquareFeature(x, y, 'double') === 'ceil') {
+                    z3 = 1;
+                } else {
+                    tdLoadObjectOBJ(type, ms, x1, y1, z1 + 1, x2, y2, z2, 0, mat, i);
+                }
+            }
+            tdLoadObjectOBJ(type, ms, x1, y1, z1 + z3, x2, y2, z2, 0, mat, i);
             break;
 
             case 'stairs':
+            var i = rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), seed, tdMaterial[mat].len);
             ms = new THREE.Object3D();
-            for(var s = 0; s < 10; s++) {
-                ms1 = tdDrawObject(type, ms, f, x, y, x1, y1 + s * 0.1, z1 - s * 0.1 + 0.9, x2, y2 * 0.1, z2 * 0.1, 0, 'box', 'wall-y01', rnd, 129.22);
+            tdLoadObjectOBJ(metatype, ms, x1, y1, z1, x2, y2, z2, 0, mat, i);
+            //for(var s = 0; s < 10; s++) {
+            //    ms1 = tdDrawObject(type, ms, f, x, y, x1, y1 + s * 0.1, z1 - s * 0.1 + 0.9, x2, y2 * 0.1, z2 * 0.1, 0, 'box', 'wall-y01', rnd, 129.22);
+            //}
+            break;
+
+            case 'pillar2':
+            ms = new THREE.Object3D();
+            if(rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), 529.52, 5) === 0) {
+                ms1 = tdDrawObject(type, ms, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'cylinder', mat, rnd, 129.22);
+                ms1 = tdDrawObject(type, ms, f, x, y, x1 - 0.1, y1 - 0.1, z1, x2 + 0.2, y2 + 0.2, 0.2, 0, 'cylinder', 'wall-x20-y02', rnd, 129.22);
+                ms1 = tdDrawObject(type, ms, f, x, y, x1 - 0.1, y1 - 0.1, z1 + 0.8, x2 + 0.2, y2 + 0.2, 0.2, 0, 'cylinder', 'wall-x20-y02', rnd, 129.22);
+            } else if(rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), 529.52, 5) === 1) {
+                ms1 = tdDrawObject(type, ms, f, x, y, x1 - 0.1, y1 - 0.1, z1, x2 + 0.2, y2 + 0.2, z2, 0, 'cylinder', 'wall-x20', rnd, 129.22);
+            } else if(rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), 529.52, 5) === 2) {
+                ms1 = tdDrawObject(type, ms, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'box4', 'wall-x05', rnd, 129.22);
+                ms1 = tdDrawObject(type, ms, f, x, y, x1 - 0.1, y1 - 0.1, z1, x2 + 0.2, y2 + 0.2, 0.2, 0, 'box', 'wall-x05-y02', rnd, 129.22);
+                ms1 = tdDrawObject(type, ms, f, x, y, x1 - 0.1, y1 - 0.1, z1 + 0.8, x2 + 0.2, y2 + 0.2, 0.2, 0, 'box', 'wall-x05-y02', rnd, 129.22);
+            } else if(rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), 529.52, 5) === 3) {
+                var i = rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), seed, tdMaterial[mat].len);
+                ms = new THREE.Object3D();
+                tdLoadObjectOBJ('pillar', ms, x1, y1, z1, x2, y2, z2, 0, mat, i);
+            } else {
+                ms1 = tdDrawObject(type, ms, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'cylinder', mat, rnd, 129.22);
+                ms1 = tdDrawObject(type, ms, f, x, y, x1 - 0.1, y1 + 0.15, z1 + 0.6, x2 + 0.2, 0, 0.4, 0, 'cylinder', 'wall-x20', rnd, 129.22);
+                ms1 = tdDrawObject(type, ms, f, x, y, x1 + 0.15, y1 - 0.1, z1, 0, y2 + 0.2, 0.4, 0, 'cylinder', 'wall-x20', rnd, 129.22);
             }
             break;
 
             case 'pillar':
             ms = new THREE.Object3D();
-            if(rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), 529.52, 3) === 0) {
-                ms1 = tdDrawObject(type, ms, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'cylinder', mat, rnd, 129.22);
-                ms1 = tdDrawObject(type, ms, f, x, y, x1 - 0.1, y1 - 0.1, z1, x2 + 0.2, y2 + 0.2, 0.2, 0, 'cylinder', 'wall-x20-y02', rnd, 129.22);
-                ms1 = tdDrawObject(type, ms, f, x, y, x1 - 0.1, y1 - 0.1, z1 + 0.8, x2 + 0.2, y2 + 0.2, 0.2, 0, 'cylinder', 'wall-x20-y02', rnd, 129.22);
-            } else if(rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), 529.52, 3) === 0) {
-                ms1 = tdDrawObject(type, ms, f, x, y, x1 - 0.1, y1 - 0.1, z1, x2 + 0.2, y2 + 0.2, z2, 0, 'cylinder', 'wall-x20', rnd, 129.22);
-            } else {
-                ms1 = tdDrawObject(type, ms, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'cylinder', mat, rnd, 129.22);
-                ms1 = tdDrawObject(type, ms, f, x, y, x1 - 0.1, y1 + 0.15, 0.6, x2 + 0.2, 0, 0.4, 0, 'cylinder', 'wall-x20', rnd, 129.22);
-                ms1 = tdDrawObject(type, ms, f, x, y, x1 + 0.15, y1 - 0.1, z1, 0, y2 + 0.2, 0.4, 0, 'cylinder', 'wall-x20', rnd, 129.22);
+            ms1 = tdDrawObject(type, ms, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'pillar2', mat, rnd, 129.22);
+            if(getSquareFeature(x, y, 'double') === 'ceil') {
+                ms1 = tdDrawObject(type, ms, f, x, y, x1, y1, z1 + 1, x2, y2, z2, 0, 'pillar2', mat, rnd, 129.22);
+                ms1.rotation.y = 90 * Math.PI / 180;
             }
+            break;
+
+            case 'obstacle':
+            var i = rand(f, x, y, seed, tdMaterial[mat].len);
+            ms = new THREE.Object3D();
+            tdLoadObjectOBJ(metatype, ms, x1, y1, z1, x2, y2, z2, 0, mat, i, true);
             break;
 
             case 'door':
@@ -851,13 +1014,13 @@ function tdDrawObject(type, msg, f, x, y, x1, y1, z1, x2, y2, z2, d, metatype, m
                     ms1 = tdDrawObject(type, ms, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'floor', mat, rnd, 51.33);
                 }
                 if(getSquareFeature(x, y, 'double') !== 'ceil' && getSquareFeature(x, y, 'double') !== 'none' && hasSquare(x, y, 'pit-ceil') === -1) {
-                    ms1 = tdDrawObject(type, ms, f, x, y, x1, y1, z1 - 0.001, x2, y2, z2, 0, 'ceil', mat, rnd, 51.33);                    
+                    ms1 = tdDrawObject(type, ms, f, x, y, x1, y1, z1 - 0.001, x2, y2, z2, 0, 'ceil', mat, rnd, 51.33);
                 }
             }
             if(rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), 391.87, 10) === 2) {
-                //if(rand(f, x, y, 197.76, 2) === 0) {
+                if(rand(f, x, y, 197.76, 2) === 0) {
                     ms1 = tdDrawObject('box4', ms, f, x, y, x1 - 0.05, y1 - 0.05, z1, 0.101, 0.101, z2, 0, 'box4', 'wall-wood-x01', rnd, 444.01);
-                //}
+                }
             } else if(rand(Math.floor(f / Math.ceil(rnd / 10)), Math.floor(x / rnd), Math.floor(y / rnd), 391.87, 10) === 3) {
                 ms1 = tdDrawObject('box', ms, f, x, y, x1, y1 - 0.05, z1 + 0.95, x2, 0.101, 0.05, 0, 'box', 'wall-wood-y01', rnd, 444.01);
                 ms1 = tdDrawObject('box', ms, f, x, y, x1, y1 + 0.95, z1 + 0.95, x2, 0.101, 0.05, 0, 'box', 'wall-wood-y01', rnd, 444.01);
@@ -892,6 +1055,9 @@ function tdDrawObject(type, msg, f, x, y, x1, y1, z1, x2, y2, z2, d, metatype, m
             case 'stairs-down':
             ms = new THREE.Object3D();
             ms1 = tdDrawObject(type, ms, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'stairs', mat, rnd, 129.22);
+            ms1 = tdDrawObject(type, ms, f, x, y, x1, y1 + 1, z1 - 1, x2, y2, z2, 0, 'stairs', mat, rnd, 129.22);
+            ms1 = tdDrawObject(type, ms, f, x, y, x1, y1 + 2, z1 - 2, x2, y2, z2, 0, 'stairs', mat, rnd, 129.22);
+            ms1 = tdDrawObject(type, ms, f, x, y, x1, y1 + 3, z1 - 3, x2, y2, z2, 0, 'stairs', mat, rnd, 129.22);
             if(getSquareFeature(x, y, 'double') === 'wall') {
                 ms1 = tdDrawObject('floor', ms, f, x, y, x1, y1, z1 + 1, x2, y2, z2, 0, 'ceil', 'floor', rnd, 51.33);
             }
@@ -901,8 +1067,12 @@ function tdDrawObject(type, msg, f, x, y, x1, y1, z1, x2, y2, z2, d, metatype, m
             ms1 = tdDrawObject('box4', ms, f, x + dir[d3].x, y + dir[d3].y, x1 + 1, y1 + 1, z1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
             ms1 = tdDrawObject('box4', ms, f, x + dir[d1].x, y + dir[d1].y, x1 - 1, y1 + 2, z1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
             ms1 = tdDrawObject('box4', ms, f, x + dir[d3].x, y + dir[d3].y, x1 + 1, y1 + 2, z1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
+            ms1 = tdDrawObject('box4', ms, f, x + dir[d1].x, y + dir[d1].y, x1 - 1, y1 + 1, z1 - 1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
+            ms1 = tdDrawObject('box4', ms, f, x + dir[d3].x, y + dir[d3].y, x1 + 1, y1 + 1, z1 - 1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
             ms1 = tdDrawObject('box4', ms, f, x + dir[d1].x, y + dir[d1].y, x1 - 1, y1 + 2, z1 - 1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
             ms1 = tdDrawObject('box4', ms, f, x + dir[d3].x, y + dir[d3].y, x1 + 1, y1 + 2, z1 - 1, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
+            ms1 = tdDrawObject('box4', ms, f, x + dir[d1].x, y + dir[d1].y, x1 - 1, y1 + 2, z1 - 2, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
+            ms1 = tdDrawObject('box4', ms, f, x + dir[d3].x, y + dir[d3].y, x1 + 1, y1 + 2, z1 - 2, x2, y2, z2, 0, 'box4', 'wall', rnd, 129.22);
             //ms1 = tdDrawObject('ramp-reversed', ms, f, x, y, x1, y1, z1, x2, y2, z2, 0, 'ramp-reversed', 'floor', rnd, 51.33);
             //ms1 = tdDrawObject('ramp-reversed', ms, f, x, y, x1, y1 + 1, z1 - 1, x2, y2, z2, 0, 'ramp-reversed', 'floor', rnd, 51.33);
             break;
@@ -913,17 +1083,17 @@ function tdDrawObject(type, msg, f, x, y, x1, y1, z1, x2, y2, z2, d, metatype, m
             ms1 = new THREE.SpotLight(0xf0e0d0);
             ms1.position.set( 0, z1, 0 );
             ms1.angle = Math.PI / 3;
-            ms1.shadowCameraNear = 0.85;
-            ms1.shadowCameraFar = 3;
-            ms1.shadowCameraFov = 170;
+            ms1.shadow.camera.near = 0.85;
+            ms1.shadow.camera.far = 3;
+            ms1.shadow.camera.fov = 170;
             ms1.intensity = 10;
             ms1.distance = 0;
             ms1.decay = 1;
-            ms1.shadowDarkness = 0.5;
-            ms1.shadowMapWidth = 1024;
-            ms1.shadowMapHeight = 1024;
+            //ms1.shadowDarkness = 0.5;
+            ms1.shadow.mapSize.width = 1024;
+            ms1.shadow.mapSize.height = 1024;
             //ms1.onlyShadow = true;
-            //ms1.shadowCameraVisible = true;
+            ms1.shadow.camera.visible = true;
             ms1.castShadow = true;
             ms1.target = ms;
             ms.add(ms1);
@@ -932,15 +1102,17 @@ function tdDrawObject(type, msg, f, x, y, x1, y1, z1, x2, y2, z2, d, metatype, m
         if(ms !== null) {
             if(mat !== '' && (typeof tdMaterial[mat].shadow === "undefined" || tdMaterial[mat].shadow)) {
                 ms.castShadow = true;
-                if(typeof tdMaterial[mat].transparent !== "undefined" && tdMaterial[mat].transparent && typeof ms.material !== "undefined" && typeof i !== "undefined") {
-                    if(typeof tdMaterial['shade-' + mat] === "undefined") {
-                        tdMaterial['shade-' + mat] = {};
-                        tdMaterial['shade-' + mat].material = [];
-                        var uniforms = { texture: { type: "t", value: null } };
-                        tdMaterial['shade-' + mat].material[i] = new THREE.ShaderMaterial( { uniforms: uniforms, vertexShader: vertexShader, fragmentShader: fragmentShader } );
+                /*if(comp.device.toLowerCase() === '') {
+                    if(typeof tdMaterial[mat].transparent !== "undefined" && tdMaterial[mat].transparent && typeof ms.material !== "undefined" && typeof i !== "undefined") {
+                        if(typeof tdMaterial['shade-' + mat] === "undefined") {
+                            tdMaterial['shade-' + mat] = {};
+                            tdMaterial['shade-' + mat].material = [];
+                            var uniforms = { texture: { type: "t", value: null } };
+                            tdMaterial['shade-' + mat].material[i] = new THREE.ShaderMaterial( { uniforms: uniforms, vertexShader: vertexShader, fragmentShader: fragmentShader } );
+                        }
+                        ms.customDepthMaterial = tdMaterial['shade-' + mat].material[i];
                     }
-                    ms.customDepthMaterial = tdMaterial['shade-' + mat].material[i];
-                }
+                }*/
             }
             ms.receiveShadow = true;
             ms.name = metatype;
@@ -951,24 +1123,102 @@ function tdDrawObject(type, msg, f, x, y, x1, y1, z1, x2, y2, z2, d, metatype, m
     return null;
 }
 
-function tdLoadObjectOBJ(type, msg, x1, y1, z1, x2, y2, z2, d, type2, mat, i) {
-    var loader = new THREE.OBJLoader();
-    loader.load('models/' + type + '.obj', function(obj) {
+function tdLoadObjectOBJ(type, msg, x1, y1, z1, x2, y2, z2, d, mat, i, i2) {
+    var file = type;
+    if(typeof i2 !== "undefined" && i2) {
+        file = file + '-' + i;
+        var mf = tdMeshFix[type][i];
+        if(typeof mf !== "undefined") {
+            x1 = mf.x1;
+            y1 = mf.y1;
+            z1 = mf.z1;
+            x2 = mf.x2;
+            y2 = mf.y2;
+            z2 = mf.z2;
+        }
+    }
+    if(typeof tdObject[file] === "undefined" || tdObject[file] === null) {
+        var loader = new THREE.OBJLoader();
+        loader.load('models/' + file + '.obj', function(obj) {
+            m = tdCreateMaterial(mat, i);
+            tdFixObject(obj, x1, y1, z1, x2, y2, z2);
+            tdObject[file] = obj.clone();
+            if(typeof obj !== "undefined") {
+                obj.traverse(function(ms) {
+                    if(ms instanceof THREE.Mesh) {
+                        if(m !== null) {
+                            ms.material = m;
+                        }
+                        ms.receiveShadow = true;
+                        ms.castShadow = true;
+                    }
+                });
+                msg.add(obj);
+            }
+        });
+    } else {
         m = tdCreateMaterial(mat, i);
-        if(m !== null) {
+        var obj = tdObject[file].clone();
+        tdFixObject(obj, x1, y1, z1, x2, y2, z2);
+        if(typeof obj !== "undefined") {
             obj.traverse(function(ms) {
                 if(ms instanceof THREE.Mesh) {
-                    ms.material = m;
+                    if(m !== null) {
+                        ms.material = m;
+                    }
+                    ms.receiveShadow = true;
                     ms.castShadow = true;
-                    ms.position.x = (x1 + (x2 / 2)) * tdSquareSize.x - tdSquareSize.x * 0.5;
-                    ms.position.y = (z1 + (z2 / 2)) * tdSquareSize.y - tdSquareSize.y * 0.5;
-                    ms.position.z = (y1 + (y2 / 2)) * tdSquareSize.x - tdSquareSize.x;
-                    ms.scale.set(0.01 * tdSquareSize.x * x2, 0.01 * tdSquareSize.y * z2, 0.01 * tdSquareSize.x * y2);
                 }
             });
+            msg.add(obj);
         }
-        msg.add(obj);
+    }
+}
+
+function tdFixObject(obj, x1, y1, z1, x2, y2, z2) {
+    var xMin = 1000000.0;
+    var yMin = 1000000.0;
+    var zMin = 1000000.0;
+    var xMax = -1000000.0;
+    var yMax = -1000000.0;
+    var zMax = -1000000.0;
+    obj.traverse(function(ms) {
+        if(ms instanceof THREE.Mesh) {
+            var pos = ms.geometry.attributes.position.array;
+            if(typeof ms.geometry !== "undefined" && typeof pos !== "undefined") {
+                for(j = 0; j < pos.length; j += 3) {
+                    if(xMin > pos[j]) {
+                        xMin = pos[j];
+                    }
+                    if(yMin > pos[j+1]) {
+                        yMin = pos[j+1];
+                    }
+                    if(zMin > pos[j+2]) {
+                        zMin = pos[j+2];
+                    }
+                    if(xMax < pos[j]) {
+                        xMax = pos[j];
+                    }
+                    if(yMax < pos[j+1]) {
+                        yMax = pos[j+1];
+                    }
+                    if(zMax < pos[j+2]) {
+                        zMax = pos[j+2];
+                    }
+                }
+            }
+        }
     });
+    var xScl = xMax - xMin;
+    var yScl = yMax - yMin;
+    var zScl = zMax - zMin;
+    var xOff = (xMin + xScl * 0.5) / xScl;
+    var yOff = (yMin + yScl * 0.5) / yScl;
+    var zOff = (zMin + zScl * 0.5) / zScl;
+    obj.position.x = (x1 + x2 / 2 - xOff) * tdSquareSize.x - tdSquareSize.x * 0.5;
+    obj.position.y = (z1 - yOff) * tdSquareSize.y + tdSquareSize.y * 0.5;
+    obj.position.z = (y1 + y2 / 2 - zOff) * tdSquareSize.x - tdSquareSize.x * 0.5;
+    obj.scale.set((tdSquareSize.x * x2) / xScl, (tdSquareSize.y * z2) / yScl, (tdSquareSize.x * y2) / zScl);
 }
 
 function tdHideWallFaces(ms, x, y) {
@@ -977,24 +1227,69 @@ function tdHideWallFaces(ms, x, y) {
     }
 }
 
+function tdMoveCameraXY(x, y, z, abs) {
+    if(typeof x === "undefined") {
+        tdMoveCameraXY(-origin.d * (Math.PI / 2), undefined, undefined, true);
+    } else {
+        if(typeof abs !== "undefined" && abs) {
+            yawObject.rotation.y = x;
+        } else {
+            yawObject.rotation.y -= x;
+        }
+        while(yawObject.rotation.y < 0.0) {
+            yawObject.rotation.y += 4.0 * (Math.PI / 2);
+        }
+        while(yawObject.rotation.y >= 4.0 * (Math.PI / 2)) {
+            yawObject.rotation.y -= 4.0 * (Math.PI / 2);
+        }
+    }
+    if(typeof y !== "undefined") {
+        if(typeof abs !== "undefined" && abs) {
+            pitchObject.rotation.x = y;
+        } else {
+            pitchObject.rotation.x -= y;
+        }
+        if(pitchObject.rotation.x < -1.0) {
+            pitchObject.rotation.x = -1.0;
+        }
+        if(pitchObject.rotation.x > 1.0) {
+            pitchObject.rotation.x = 1.0;
+        }
+    }
+    if(typeof z !== "undefined") {
+        if(typeof abs !== "undefined" && abs) {
+            rollObject.rotation.z = z;
+        } else {
+            rollObject.rotation.z -= z;
+        }
+    }
+
+    camera.rotation.z = 0;
+    camera.rotation.y = 0;
+    camera.rotation.x = 0;
+    camera.rotateY(yawObject.rotation.y);
+    camera.rotateX(pitchObject.rotation.x);
+    camera.rotateZ(rollObject.rotation.z);
+}
+
 function tdMoveCamera(d) {
     if(playerCanMove(d) === 1) {
         keysFrozen = true;
         var xo = dir[d].x;
         var yo = dir[d].y;
-        var zo1 = tdSquareSize.y * 0.5;
-        var zo2 = tdSquareSize.y * 0.5;
+        var zo1 = tdPlayerHeight;
+        var zo2 = tdPlayerHeight;
         if(hasSquare(origin.x, origin.y, 'stairs-up') > -1) {
-            zo1 = tdSquareSize.y * 1.2;
+            zo1 += tdSquareSize.y * 0.5;
         }
         if(hasSquare(origin.x + xo, origin.y + yo, 'stairs-up') > -1) {
-            zo2 = tdSquareSize.y * 1.2;
+            zo2 += tdSquareSize.y * 0.5;
         }
         if(hasSquare(origin.x, origin.y, 'stairs-down') > -1) {
-            zo1 = tdSquareSize.y * 0.2;
+            zo1 -= tdSquareSize.y * 0.5;
         }
         if(hasSquare(origin.x + xo, origin.y + yo, 'stairs-down') > -1) {
-            zo2 = tdSquareSize.y * 0.2;
+            zo2 -= tdSquareSize.y * 0.5;
         }
         origin.x = origin.x + xo;
         origin.y = origin.y + yo;
@@ -1012,7 +1307,7 @@ function tdMoveCamera(d) {
                 camera.position.x = this.x * tdSquareSize.x;
                 camera.position.y = this.z;
                 camera.position.z = this.y * tdSquareSize.x;
-                camera.translateZ(tdSquareSize.x * 0.75);
+                camera.translateZ(tdBackStep);
             })
             .onComplete(function() {
                 keysFrozen = false;
@@ -1025,20 +1320,29 @@ function tdMoveCamera(d) {
 
 function tdRotateCamera(d) {
     keysFrozen = true;
-    var do1 = -Math.PI / 2 * origin.d;
-    var d1 = -Math.PI / 2 * d;
-    origin.d = (origin.d + d + 4) % 4;
-    new TWEEN.Tween( {d: do1} )
-        .to( {d: do1 + d1}, 400)
+    var do1 = origin.d; //-Math.PI / 2 * 
+    var d1 = d; //-Math.PI / 2 * 
+    //origin.d = (origin.d + d + 4) % 4;
+    new TWEEN.Tween( {d: yawObject.rotation.y} ) //do1
+        .to( {d: yawObject.rotation.y - d1 * (Math.PI / 2)}, 400) //do1 + d1
         .easing(TWEEN.Easing.Sinusoidal.InOut)
         .onUpdate(function() {
             camera.position.x = (origin.x - origin.xt) * tdSquareSize.x;
+            var zo1 = tdPlayerHeight;
+            if(hasSquare(origin.x, origin.y, 'stairs-up') > -1) {
+                zo1 += tdSquareSize.y * 0.5;
+            }
+            if(hasSquare(origin.x, origin.y, 'stairs-down') > -1) {
+                zo1 -= tdSquareSize.y * 0.5;
+            }
+            camera.position.y = zo1;
             camera.position.z = (origin.y - origin.yt) * tdSquareSize.x;
-            camera.rotation.y = this.d;
-            camera.translateZ(tdSquareSize.x * 0.75);
+            tdMoveCameraXY(this.d, undefined, undefined, true); //yawObject.rotation.y + this.d * (Math.PI / 2)
+            camera.translateZ(tdBackStep);
         })
         .onComplete(function() {
             keysFrozen = false;
+            origin.d = (origin.d + d + 4) % 4;
             floorAction(origin.x, origin.y, origin.d);
             tdUpdateCamera();
         })
@@ -1072,25 +1376,119 @@ function tdClearObject(obj, p) {
     }
 }
 
-function tdUpdateCamera() {
-    var rx = camera.rotation.x;
-    var rz = camera.rotation.z;
+//doc = device orientation control
+function tdUpdateCamera(doc) {
+    //var rx = camera.rotation.x;
+    //var rz = camera.rotation.z;
     camera.position.x = (origin.x - origin.xt) * tdSquareSize.x;
+    camera.position.y = tdPlayerHeight;
     camera.position.z = (origin.y - origin.yt) * tdSquareSize.x;
-    camera.rotation.y = -Math.PI / 2 * origin.d;
+    //if(typeof doc === "undefined" || !doc) {
+        //camera.rotation.y = -Math.PI / 2 * origin.d;
+    //}
     if(hasSquare(origin.x, origin.y, 'stairs-up') > -1) {
-        camera.position.y = tdSquareSize.y * 1.2;
+        camera.position.y += tdSquareSize.y * 0.5;
     } else if(hasSquare(origin.x, origin.y, 'stairs-down') > -1) {
-        camera.position.y = tdSquareSize.y * 0.2;
-    } else {
-        camera.position.y = tdSquareSize.y * 0.5;
+        camera.position.y -= tdSquareSize.y * 0.5;
+    //} else {
+    //    camera.position.y = tdSquareSize.y * 0.5;
     }
-    camera.translateZ(tdSquareSize.x * 0.75);
+    camera.translateZ(tdBackStep);
     light.position.set(0, 0, tdSquareSize.x * 0.3);
 
-    var coo = 'F: ' + origin.f + ', X: ' + origin.x + ', Y: ' + origin.y + ', D: ' + origin.d
+    var dirc = controls.getDirection();
+    var od = origin.d;
+    origin.d = Math.round(dirc.y / (-Math.PI / 2)) % 4;
+    while(origin.d < 0) {
+        origin.d += 4;
+    }
+    if(od !== origin.d) { //rotation changed
+        floorAction(origin.x, origin.y, origin.d);
+        //tdUpdateCamera();
+    }
+
+    //SPRITES
+    if(stereo) {
+        for(s in tdSprite) {
+            var vis = 2;
+            if(typeof tdSprite[s].visible !== "undefined") {
+                vis = tdSprite[s].visible(origin.x, origin.y, origin.d, true);
+            }
+            if(vis > 0) {
+                if(tdSprite[s].position === 'relative') {
+                    tdSprite[s].mesh.position.set(0, 0, 0);
+                    tdSprite[s].mesh.rotation.set(0, 0, 0);
+                    tdSprite[s].mesh.rotateY(-dirc.y + (-Math.PI / 2) * (4 + origin.d));
+                    tdSprite[s].mesh.rotateX(-dirc.x);
+                    tdSprite[s].mesh.translateZ(-1);
+                    if(typeof tdSprite[s].offsetY !== "undefined") {
+                        tdSprite[s].mesh.translateY(-tdSprite[s].offsetY);
+                    }
+                    if(typeof tdSprite[s].offsetX !== "undefined") {
+                        tdSprite[s].mesh.translateX(tdSprite[s].offsetX);
+                    }
+                    var op = tdGetSpriteOpacity(s);
+                    if(op > 0.4) {
+                        var sc = tdSprite[s].mesh.scale.x;
+                        if(tdSprite[s].mesh.material.opacity < 1.2) {
+                            tdSprite[s].mesh.material.opacity += 0.05;
+                        }
+                        if(sc > tdSprite[s].scale * 1.2) {
+                            //if(typeof tdSprite[s].scale !== "undefined") {
+                            //    tdSprite[s].mesh.scale.set(tdSprite[s].scale, tdSprite[s].scale, tdSprite[s].scale);
+                            //} else {
+                            //    tdSprite[s].mesh.scale.set(1, 1, 1);
+                            //}
+                            //tdSprite[s].mesh.material.opacity = 0.0;
+                            //buttonEvents();
+                        } else {
+                            tdSprite[s].mesh.scale.set(sc * 1.01, sc * 1.01, sc * 1.01);
+                        }
+                    } else {
+                        if(typeof tdSprite[s].scale !== "undefined") {
+                            tdSprite[s].mesh.scale.set(tdSprite[s].scale, tdSprite[s].scale, tdSprite[s].scale);
+                        } else {
+                            tdSprite[s].mesh.scale.set(1, 1, 1);
+                        }
+                        tdSprite[s].mesh.material.opacity = op;
+                    }
+                } else {
+                    tdSprite[s].mesh.material.opacity = 1.0;
+                }
+            } else {
+                tdSprite[s].mesh.material.opacity = 0.0;
+            }
+        }
+    }
+
+    var coo = 'F: ' + origin.f + ', X: ' + origin.x + ', Y: ' + origin.y + ', D: ' + origin.d;
     $('body input#coordinates').val(coo);
     setCookie('player-coordinates', coo, 365);
+}
+
+function tdGetSpriteOpacity(id) {
+    var canvas = document.getElementById('view');
+    var cx = canvas.width;
+    var cy = canvas.height;
+    var vector = new THREE.Vector3();
+    vector.setFromMatrixPosition( tdSprite[id].mesh.matrixWorld );
+    xy = tdCreateVector(vector.x, vector.y, vector.z, camera, cx, cy);
+    var op = Math.abs(xy.x - 0.5 * cx) / (cx / 24.0);
+    op = op + Math.abs(xy.y - 0.5 * cy) / (cy / 12.0);
+    if(op > 1.0) op = 1.0;
+    if(op < 0.0) op = 0.0;
+    op = 1.0 - op;
+    return op;
+}
+
+function tdCreateVector(x, y, z, camera, width, height) {
+    var p = new THREE.Vector3(x, y, z);
+    var vector = p.project(camera);
+
+    vector.x = (vector.x + 1) / 2 * width;
+    vector.y = -(vector.y - 1) / 2 * height;
+
+    return vector;
 }
 
 function tdRotateInWorld(axis, object, radians) {
@@ -1104,4 +1502,73 @@ function tdRotateInWorld(axis, object, radians) {
     rotWorldMatrix.multiply(object.matrix);
     object.matrix = rotWorldMatrix;
     object.rotation.setFromRotationMatrix(object.matrix);
+}
+
+function checkPointerLock() {
+    var havePointerLock = 'pointerLockElement' in document || 'mozPointerLockElement' in document || 'webkitPointerLockElement' in document;
+
+    if ( havePointerLock ) {
+
+        var element = document.body;
+
+        var pointerlockchange = function ( event ) {
+
+            if ( document.pointerLockElement === element || document.mozPointerLockElement === element || document.webkitPointerLockElement === element ) {
+                controls.enabled = true;
+                controlsEnabled = true;
+            } else {
+
+                controls.enabled = false;
+                controlsEnabled = false;
+            }
+
+        };
+
+        var pointerlockerror = function ( event ) {
+
+        };
+
+        // Hook pointer lock state change events
+        document.addEventListener( 'pointerlockchange', pointerlockchange, false );
+        document.addEventListener( 'mozpointerlockchange', pointerlockchange, false );
+        document.addEventListener( 'webkitpointerlockchange', pointerlockchange, false );
+
+        document.addEventListener( 'pointerlockerror', pointerlockerror, false );
+        document.addEventListener( 'mozpointerlockerror', pointerlockerror, false );
+        document.addEventListener( 'webkitpointerlockerror', pointerlockerror, false );
+
+        document.getElementById('view').addEventListener( 'click', function ( event ) {
+
+            // Ask the browser to lock the pointer
+            element.requestPointerLock = element.requestPointerLock || element.mozRequestPointerLock || element.webkitRequestPointerLock;
+
+            if ( /Firefox/i.test( navigator.userAgent ) ) {
+
+                var fullscreenchange = function ( event ) {
+
+                    if ( document.fullscreenElement === element || document.mozFullscreenElement === element || document.mozFullScreenElement === element ) {
+
+                        document.removeEventListener( 'fullscreenchange', fullscreenchange );
+                        document.removeEventListener( 'mozfullscreenchange', fullscreenchange );
+
+                        element.requestPointerLock();
+                    }
+
+                };
+
+                document.addEventListener( 'fullscreenchange', fullscreenchange, false );
+                document.addEventListener( 'mozfullscreenchange', fullscreenchange, false );
+
+                element.requestFullscreen = element.requestFullscreen || element.mozRequestFullscreen || element.mozRequestFullScreen || element.webkitRequestFullscreen;
+
+                element.requestFullscreen();
+
+            } else {
+
+                element.requestPointerLock();
+
+            }
+
+        }, false );
+    }
 }
