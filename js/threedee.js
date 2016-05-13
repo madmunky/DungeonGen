@@ -1477,17 +1477,20 @@ function tdUpdateCamera(doc) {
 }
 
 function tdGetSpriteOpacity(id) {
-    var canvas = document.getElementById('view');
-    var cx = canvas.width;
-    var cy = canvas.height;
-    var vector = new THREE.Vector3();
-    vector.setFromMatrixPosition( tdSprite[id].mesh.matrixWorld );
-    xy = tdCreateVector(vector.x, vector.y, vector.z, camera, cx, cy);
-    var op = Math.abs(xy.x - 0.5 * cx) / (cx / 24.0);
-    op = op + Math.abs(xy.y - 0.5 * cy) / (cy / 12.0);
-    if(op > 1.0) op = 1.0;
-    if(op < 0.0) op = 0.0;
-    op = 1.0 - op;
+    op = 0.0;
+    if(typeof tdSprite[id].mesh !== "undefined") {
+        var canvas = document.getElementById('view');
+        var cx = canvas.width;
+        var cy = canvas.height;
+        var vector = new THREE.Vector3();
+        vector.setFromMatrixPosition( tdSprite[id].mesh.matrixWorld );
+        xy = tdCreateVector(vector.x, vector.y, vector.z, camera, cx, cy);
+        op = Math.abs(xy.x - 0.5 * cx) / (cx / 24.0);
+        op = op + Math.abs(xy.y - 0.5 * cy) / (cy / 12.0);
+        if(op > 1.0) op = 1.0;
+        if(op < 0.0) op = 0.0;
+        op = 1.0 - op;
+    }
     return op;
 }
 
