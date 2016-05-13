@@ -824,7 +824,7 @@ function tdDrawObject(type, msg, f, x, y, x1, y1, z1, x2, y2, z2, d, metatype, m
                     tdGeometry[geotype] = new THREE.CylinderGeometry(x2 * 0.5, y2 * 0.5, z2, 9);
                 }
                 ms = new THREE.Mesh(tdGeometry[geotype], m);
-                ms.scale.set(tdSquareSize.x, tdSquareSize.y, tdSquareSize.x);
+                ms.scale.set(tdSquareSize.x, tdSquareSize.y * 0.6666, tdSquareSize.x);
                 ms.position.set((x1 + (x2 / 2)) * tdSquareSize.x - tdSquareSize.x * 0.5, (z1 + (z2 / 2)) * tdSquareSize.y, (y1 + (y2 / 2)) * tdSquareSize.x - tdSquareSize.x * 0.5);
                 ms.rotation.x = 90 * Math.PI / 180;
             }
@@ -838,7 +838,7 @@ function tdDrawObject(type, msg, f, x, y, x1, y1, z1, x2, y2, z2, d, metatype, m
                     tdGeometry[geotype] = new THREE.CylinderGeometry(x2 * 0.5, y2 * 0.5, z2, 9);
                 }
                 ms = new THREE.Mesh(tdGeometry[geotype], m);
-                ms.scale.set(tdSquareSize.x, tdSquareSize.y, tdSquareSize.x);
+                ms.scale.set(tdSquareSize.x, tdSquareSize.y * 0.6666, tdSquareSize.x);
                 ms.position.set((x1 + (x2 / 2)) * tdSquareSize.x - tdSquareSize.x * 0.5, (z1 + (z2 / 2)) * tdSquareSize.y, (y1 + (y2 / 2)) * tdSquareSize.x - tdSquareSize.x * 0.5);
                 ms.rotation.z = 90 * Math.PI / 180;
             }
